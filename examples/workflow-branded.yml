@@ -1,6 +1,15 @@
 # AI code review — branded bot (posts the review with a custom name & avatar).
 # Copy into your repo at .github/workflows/ai-code-review.yml and pin the action to @v1.
 #
+# EASIEST (zero secrets): install the ReviewAlly GitHub App on the repo, then just:
+#
+#       - uses: nethbotheju/ai-code-review@v1
+#         with:
+#           app-token-url: https://api.reviewally.nethbotheju.dev/token
+#
+# Reviews post as reviewally[bot] with the ReviewAlly logo. No APP_ID / private key.
+# The manual App / PAT options below are only needed if you want your own identity.
+#
 # Triggers: add the "ai-review" label to a PR, or comment "/ai-review".
 # Set auto-review: 'true' to also review on open / reopen / push.
 #

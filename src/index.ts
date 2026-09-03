@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import { getOctokit } from '@actions/github';
 import { getInputs } from './config/inputs';
 import { resolveTrigger } from './github/trigger';
+import { fetchAppToken, AppNotInstalledError } from './github/app-token';
 import {
   fetchFileContents,
   fetchPullRequest,
@@ -37,7 +38,34 @@ async function run(): Promise<void> {
     }
 
     const { owner, repo, pullNumber, commentId } = trigger.review;
-    const octokit = getOctokit(inputs.githubToken);
+
+    // Branded bot: swap the workflow identity for the ReviewAlly App identity
+    // when a minter endpoint is configured. Falls back gracefully.
+    let githubToken = inputs.githubToken;
+    if (inputs.appTokenUrl) {
+      try {
+        const appToken = await fetchAppToken(
+          inputs.appTokenUrl,
+          inputs.githubToken,
+          `${owner}/${repo}`,
+        );
+        core.setSecret(appToken.token);
+        githubToken = appToken.token;
+        core.info(`Using ReviewAlly app token (expires ${appToken.expiresAt ?? 'soon'}).`);
+      } catch (err) {
+        if (err instanceof AppNotInstalledError) {
+          core.info(
+            `ReviewAlly app is not installed on ${owner}/${repo} — install it at https://github.com/apps/reviewally for branded reviews. Posting as the default workflow identity.`,
+          );
+        } else {
+          core.warning(
+            `Branded bot unavailable (${(err as Error).message}); this looks like a minter or configuration issue rather than a missing installation — check app-token-url. Posting as the default workflow identity.`,
+          );
+        }
+      }
+    }
+
+    const octokit = getOctokit(githubToken);
 
     if (commentId) await reactToComment(octokit, owner, repo, commentId, 'eyes');
 

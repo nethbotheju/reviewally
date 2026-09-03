@@ -37,7 +37,7 @@ describe('formatReview', () => {
     expect(out).toContain('Added helper');
     expect(out).toContain('## Recommendations');
     expect(out).toContain('**[Security]:** Validate input');
-    expect(out).toContain('Automated review using AI Code Review');
+    expect(out).toContain('Automated review using ReviewAlly');
   });
 
   it('falls back to placeholder when background is empty', () => {
@@ -100,6 +100,6 @@ describe('formatNoChanges', () => {
     const out = formatNoChanges();
     expect(out).toContain('### Issue / Background');
     expect(out).toContain('No reviewable code changes');
-    expect(out).toContain('Automated review using AI Code Review');
+    expect(out).toContain('Automated review using ReviewAlly');
   });
 });

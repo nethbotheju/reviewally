@@ -42,6 +42,22 @@ export function getInputs(): ActionInputs {
 
   const model = core.getInput('model', { required: true });
   const githubToken = core.getInput('github-token', { required: true });
+  let appTokenUrl = core.getInput('app-token-url').trim() || undefined;
+  if (appTokenUrl) {
+    let parsed: URL;
+    try {
+      parsed = new URL(appTokenUrl);
+    } catch {
+      throw new Error(`Invalid app-token-url '${appTokenUrl}'. Must be a valid URL.`);
+    }
+    if (parsed.protocol !== 'https:') {
+      // The workflow GITHUB_TOKEN is sent to this endpoint; http:// would leak it in cleartext.
+      throw new Error(
+        `Invalid app-token-url '${appTokenUrl}'. Must be an https:// URL — the workflow token is sent to this endpoint.`,
+      );
+    }
+    appTokenUrl = parsed.toString();
+  }
   const triggerComment = core.getInput('trigger-comment').trim() || '/ai-review';
   const triggerLabel = core.getInput('trigger-label').trim() || 'ai-review';
   const autoReview = core.getBooleanInput('auto-review');
@@ -77,6 +93,7 @@ export function getInputs(): ActionInputs {
     baseUrl,
     model,
     githubToken,
+    appTokenUrl,
     triggerComment,
     triggerLabel,
     autoReview,

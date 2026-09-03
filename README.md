@@ -1,4 +1,8 @@
-# AI Code Review — GitHub Action
+<div align="center">
+  <img src="images/robot-mascot-squircle.png" alt="ReviewAlly mascot" width="140" />
+  <h1>ReviewAlly</h1>
+  <p><strong>AI Code Review GitHub Action</strong></p>
+</div>
 
 A reusable GitHub Action that performs **AI-powered code review on pull requests**.
 Bring your own key (BYOK) and choose your model — OpenAI, any OpenAI-compatible
@@ -85,11 +89,35 @@ Then add the **`ai-review`** label to a PR, or comment **`/ai-review`**.
 By default the review is posted with the workflow's `GITHUB_TOKEN`, so it shows as
 `github-actions[bot]` with the GitHub logo — **no extra setup required**.
 
-For a custom name and logo (like CodeRabbit), pass a different token through the
-`github-token` input. The identity comes entirely from the token, so **no action code
-changes are needed**. Two options:
+For a custom name and logo (like CodeRabbit), the identity must come from a token
+that carries one — the default `GITHUB_TOKEN` always renders as `github-actions[bot]`
+(a GitHub platform rule, not an action limitation).
 
-### Option A — GitHub App (recommended for branding)
+### Recommended — install the ReviewAlly App (zero secrets)
+
+1. Install the **ReviewAlly** GitHub App on your repo or org.
+2. Add one input to the workflow:
+
+```yaml
+    - uses: nethbotheju/ai-code-review@v1
+      with:
+        app-token-url: https://api.reviewally.nethbotheju.dev/token
+        # ...your other inputs
+```
+
+No `APP_ID`, no `APP_PRIVATE_KEY`, no PAT. The action exchanges its own workflow
+token for a short-lived (1 hour), **repo-scoped** ReviewAlly token and posts the
+review as `reviewally[bot]` with the ReviewAlly logo. If the App is not installed
+on the repo, the action logs a warning and falls back to the default identity
+instead of failing. The minter is open source in [`minter/`](./minter/README.md) —
+you can deploy your own instance if you prefer not to depend on the published one.
+
+### Advanced — bring your own identity
+
+Both options below also work; they just move the key handling into your repo
+secrets. The identity comes entirely from the token passed to `github-token`:
+
+#### Option A — GitHub App (recommended for branding)
 
 1. Create a GitHub App: set a name + logo, grant **Pull requests: Read & write**,
    **Contents: Read**, **Issues: Read & write**. Leave the webhook off and subscribe to
@@ -141,6 +169,7 @@ A complete ready-to-paste branded workflow is in
 | `base-url` | only `openai-chat-compatible` | provider default | API base URL override |
 | `model` | yes | — | Model identifier |
 | `github-token` | no | `${{ github.token }}` | Token for reading the PR and posting the review |
+| `app-token-url` | no | — | ReviewAlly token-minter endpoint; posts as `reviewally[bot]` with zero consumer secrets (see [Branded bot](#optional-post-as-a-branded-bot-custom-name--avatar)) |
 | `trigger-comment` | no | `/ai-review` | Slash command that triggers a review |
 | `trigger-label` | no | `ai-review` | Label that triggers a review |
 | `auto-review` | no | `false` | Also review on PR open/reopen/push |
@@ -170,7 +199,7 @@ The review is posted as a single, structured document:
 - **Summary of File Changes** — a per-file table (path, change type, description).
 - **Recommendations** — high-level suggestions only (Security / Edge Case / Performance /
   Refactoring Tip). Trivial nits (missing comments/tests, style) are intentionally excluded.
-- Closes with a small `_Automated review using AI Code Review._` watermark.
+- Closes with a small `_Automated review using ReviewAlly._` watermark.
 - The review is always **non-blocking** (`COMMENT` event).
 
 ## Agent mode (`review-mode: agent`)
@@ -223,10 +252,10 @@ that major, so consumers can pin `@v1` while receiving patch updates.
 
 ## Roadmap
 
-- **Reduce per-consumer setup for branded bots.** Today, branding via a GitHub App or
-  PAT requires each repo to add its own secrets. A hosted (webhook) mode would let
-  consumers click **Install** with zero per-repo secrets — the App would receive events
-  directly and run centrally. This is a larger, separate effort.
+1. **Reduce per-consumer setup for branded bots.** Branding now works with zero
+   secrets via the hosted token minter (`minter/`, `app-token-url`). Remaining:
+   a fully hosted (webhook) mode where consumers click **Install** with no workflow
+   file at all — the App would receive events directly and run centrally.
 - Retry on transient provider errors (e.g. HTTP 5xx).
 - `generateObject` for typed final output (replace fragile JSON parsing).
 - Search tool with MCP integration for richer codebase queries.

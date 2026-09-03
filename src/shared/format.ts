@@ -41,7 +41,7 @@ export function formatReview(doc: ReviewDocument, files: ChangedFile[]): string 
   }
   out.push('');
 
-  out.push('---', '_Automated review using AI Code Review._');
+  out.push('---', '_Automated review using ReviewAlly._');
 
   return out.join('\n');
 }
@@ -53,7 +53,7 @@ export function formatNoChanges(): string {
     'No reviewable code changes were found (only excluded, generated, deleted, or binary files).',
     '',
     '---',
-    '_Automated review using AI Code Review._',
+    '_Automated review using ReviewAlly._',
   ].join('\n');
 }
 
