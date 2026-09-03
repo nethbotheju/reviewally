@@ -1,9 +1,5 @@
-// PEM/DER helpers for the ReviewAlly minter.
-//
-// GitHub App keys ship as either PKCS#8 ("BEGIN PRIVATE KEY") or PKCS#1
-// ("BEGIN RSA PRIVATE KEY"). WebCrypto only imports PKCS#8, so PKCS#1 keys
-// must be wrapped. Detection walks the DER structure properly (tag + length)
-// rather than probing at a fixed offset.
+// PEM/DER helpers. GitHub App keys ship as PKCS#8 ("BEGIN PRIVATE KEY") or
+// PKCS#1 ("BEGIN RSA PRIVATE KEY"); WebCrypto only imports PKCS#8.
 
 export const RSA_OID = [0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01];
 
@@ -27,7 +23,7 @@ export function pemToDer(pem) {
 }
 
 // Reads a DER length field at `offset` (the byte after the tag).
-// Returns [length, headerLength] or throws on truncation/unsupported forms.
+// Returns [length, headerLength].
 function readDerLength(der, offset) {
   const first = der[offset];
   if (first === undefined) throw new Error('truncated DER: missing length field');
@@ -44,9 +40,7 @@ function readDerLength(der, offset) {
   return [len, 1 + numBytes];
 }
 
-// True when the DER is a PKCS#8 PrivateKeyInfo whose algorithm is rsaEncryption:
-//   SEQUENCE { INTEGER 0, SEQUENCE { OID rsaEncryption, NULL }, OCTET STRING }
-// Structure is walked with real TLV parsing — no fixed offsets.
+// True when the DER is a PKCS#8 PrivateKeyInfo whose algorithm is rsaEncryption.
 export function looksLikePkcs8(der) {
   try {
     if (der[0] !== 0x30) return false; // outer SEQUENCE
@@ -73,7 +67,7 @@ export function looksLikePkcs8(der) {
     if (der[params + 2] !== 0x04) return false; // OCTET STRING wrapping RSAPrivateKey
     return true;
   } catch {
-    return false; // malformed DER is simply "not PKCS#8"; import will surface the error
+    return false;
   }
 }
 
@@ -92,14 +86,13 @@ function tlv(tag, content) {
   return [tag, ...derLen(content.length), ...content];
 }
 
-// Passes PKCS#8 DER through unchanged; wraps PKCS#1 RSAPrivateKey DER into a
-// PKCS#8 PrivateKeyInfo so WebCrypto can import it.
+// Passes PKCS#8 DER through unchanged; wraps a PKCS#1 RSAPrivateKey into PKCS#8.
 export function toPkcs8(der) {
   if (looksLikePkcs8(der)) return der;
   const inner = [
     0x02, 0x01, 0x00, // version 0
-    0x30, 0x0d, 0x06, 0x09, ...RSA_OID, 0x05, 0x00, // AlgorithmIdentifier: rsaEncryption
-    ...tlv(0x04, [...der]), // OCTET STRING wrapping the RSAPrivateKey
+    0x30, 0x0d, 0x06, 0x09, ...RSA_OID, 0x05, 0x00, // AlgorithmIdentifier
+    ...tlv(0x04, [...der]),
   ];
   return new Uint8Array(tlv(0x30, inner));
 }
