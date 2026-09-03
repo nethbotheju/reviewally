@@ -2,7 +2,7 @@ name: 'ReviewAlly'
 description: 'ReviewAlly — AI-powered pull request code review. Bring your own key (OpenAI, OpenAI-compatible, or Anthropic). Triggered by a label or a slash command.'
 author: 'nethbotheju'
 branding:
-  icon: 'eye'
+  icon: 'shield'
   color: 'green'
 
 inputs:

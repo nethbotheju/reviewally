@@ -10,11 +10,15 @@
 // -> 401 token not valid for that repo
 // -> 404 ReviewAlly is not installed on that repo
 
+import { pemToDer, toPkcs8 } from './crypto.js';
+
 const API = 'https://api.github.com';
 const TOKEN_TTL_SECONDS = 3600;
 const PER_REPO_HOURLY_LIMIT = 30;
+const JWT_CACHE_MS = 120_000; // JWTs are valid ~3 min; caching 2 min keeps a safety window
 
 let cachedKey = null;
+let cachedJwt = null; // { value, expMs }
 
 export default {
   async fetch(request, env) {
@@ -112,33 +116,23 @@ function rateLimit(repo) {
 }
 
 async function appJwt(env) {
+  const now = Date.now();
+  if (cachedJwt && now < cachedJwt.expMs) return cachedJwt.value;
   const appId = env.APP_ID;
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const now = Math.floor(Date.now() / 1000);
-  const payload = b64url(JSON.stringify({ iat: now - 60, exp: now + 180, iss: appId }));
+  const iat = Math.floor(now / 1000);
+  const payload = b64url(JSON.stringify({ iat: iat - 60, exp: iat + 180, iss: appId }));
   const data = `${header}.${payload}`;
   const key = await importKey(env.GITHUB_APP_PRIVATE_KEY);
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, bytes(data));
-  return `${data}.${b64urlBytes(sig)}`;
+  const jwt = `${data}.${b64urlBytes(sig)}`;
+  cachedJwt = { value: jwt, expMs: now + JWT_CACHE_MS };
+  return jwt;
 }
 
 async function importKey(pem) {
   if (cachedKey) return cachedKey;
-  const b64 = pem
-    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----/, '')
-    .replace(/-----END [A-Z ]*PRIVATE KEY-----/, '')
-    .replace(/[\s\r\n]+/g, '');
-  if (!b64) throw new Error('no PEM body found — was the full file pasted?');
-  let raw;
-  try {
-    raw = atob(b64);
-  } catch {
-    throw new Error('key body is not valid base64 — stray characters in the paste');
-  }
-  if (raw.length < 100) {
-    throw new Error(`key body too short (${raw.length} chars) — paste is truncated`);
-  }
-  const der = Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  const der = pemToDer(pem);
   try {
     cachedKey = await crypto.subtle.importKey(
       'pkcs8',
@@ -151,39 +145,6 @@ async function importKey(pem) {
     throw new Error('key structure rejected — content is malformed or mixed up');
   }
   return cachedKey;
-}
-
-// GitHub App keys ship as either PKCS#8 ("BEGIN PRIVATE KEY") or PKCS#1
-// ("BEGIN RSA PRIVATE KEY"); WebCrypto only imports PKCS#8, so wrap PKCS#1.
-const PKCS8_ALG_PREFIX = [
-  0x02, 0x01, 0x00, 0x30, 0x0d, 0x06, 0x09,
-  0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
-];
-
-function derLen(n) {
-  if (n < 0x80) return [n];
-  const bytes = [];
-  let x = n;
-  while (x > 0) {
-    bytes.unshift(x & 0xff);
-    x >>= 8;
-  }
-  return [0x80 | bytes.length, ...bytes];
-}
-
-function tlv(tag, content) {
-  return [tag, ...derLen(content.length), ...content];
-}
-
-function toPkcs8(der) {
-  const looksPkcs8 = PKCS8_ALG_PREFIX.every((b, i) => der[i + 4] === b);
-  if (looksPkcs8) return der;
-  const inner = [
-    0x02, 0x01, 0x00, // version 0
-    0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, // rsaEncryption
-    ...tlv(0x04, [...der]), // OCTET STRING wrapping the RSAPrivateKey
-  ];
-  return new Uint8Array(tlv(0x30, inner));
 }
 
 function bytes(s) {

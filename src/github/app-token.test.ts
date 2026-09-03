@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchAppToken } from './app-token';
+import { fetchAppToken, AppNotInstalledError } from './app-token';
 
 const realFetch = globalThis.fetch;
 
@@ -44,6 +44,41 @@ describe('fetchAppToken', () => {
     await expect(
       fetchAppToken('https://minter.example/token', 'ghs_wf', 'owner/name'),
     ).rejects.toThrow('404: ReviewAlly is not installed on this repo');
+  });
+
+  it('marks 404s as AppNotInstalledError so callers can tailor the guidance', async () => {
+    stubFetch(404, { error: 'ReviewAlly is not installed on this repo' });
+
+    const err = await fetchAppToken('https://minter.example/token', 'ghs_wf', 'owner/name').catch(
+      (e) => e,
+    );
+    expect(err).toBeInstanceOf(AppNotInstalledError);
+    expect(err.name).toBe('AppNotInstalledError');
+  });
+
+  it('retries a transient 502 once and succeeds on the second attempt', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('bad gateway', { status: 502 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ token: 'ghs_minted' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ) as unknown as typeof fetch;
+
+    const out = await fetchAppToken('https://minter.example/token', 'ghs_wf', 'owner/name');
+    expect(out.token).toBe('ghs_minted');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a persistent client error like 400', async () => {
+    stubFetch(400, { error: 'invalid repo; expected "owner/name"' });
+
+    await expect(
+      fetchAppToken('https://minter.example/token', 'ghs_wf', 'owner/name'),
+    ).rejects.toThrow('400: invalid repo');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('handles non-JSON error bodies', async () => {

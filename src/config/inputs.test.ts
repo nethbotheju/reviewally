@@ -124,4 +124,19 @@ describe('getInputs', () => {
     setEnv({ 'INPUT_API-TYPE': 'openai-chat-compatible', 'INPUT_BASE-URL': 'https://x/v1' });
     expect(getInputs().baseUrl).toBe('https://x/v1');
   });
+
+  it('accepts an https app-token-url', () => {
+    setEnv({ 'INPUT_APP-TOKEN-URL': 'https://api.reviewally.nethbotheju.dev/token' });
+    expect(getInputs().appTokenUrl).toBe('https://api.reviewally.nethbotheju.dev/token');
+  });
+
+  it('rejects an http app-token-url (token would leak in cleartext)', () => {
+    setEnv({ 'INPUT_APP-TOKEN-URL': 'http://api.reviewally.nethbotheju.dev/token' });
+    expect(() => getInputs()).toThrow(/app-token-url.*https/);
+  });
+
+  it('rejects a malformed app-token-url', () => {
+    setEnv({ 'INPUT_APP-TOKEN-URL': 'not a url' });
+    expect(() => getInputs()).toThrow(/Invalid app-token-url/);
+  });
 });

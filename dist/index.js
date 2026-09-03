@@ -31016,7 +31016,21 @@ function getInputs() {
     }
     const model = core.getInput('model', { required: true });
     const githubToken = core.getInput('github-token', { required: true });
-    const appTokenUrl = core.getInput('app-token-url').trim() || undefined;
+    let appTokenUrl = core.getInput('app-token-url').trim() || undefined;
+    if (appTokenUrl) {
+        let parsed;
+        try {
+            parsed = new URL(appTokenUrl);
+        }
+        catch {
+            throw new Error(`Invalid app-token-url '${appTokenUrl}'. Must be a valid URL.`);
+        }
+        if (parsed.protocol !== 'https:') {
+            // The workflow GITHUB_TOKEN is sent to this endpoint; http:// would leak it in cleartext.
+            throw new Error(`Invalid app-token-url '${appTokenUrl}'. Must be an https:// URL — the workflow token is sent to this endpoint.`);
+        }
+        appTokenUrl = parsed.toString();
+    }
     const triggerComment = core.getInput('trigger-comment').trim() || '/ai-review';
     const triggerLabel = core.getInput('trigger-label').trim() || 'ai-review';
     const autoReview = core.getBooleanInput('auto-review');
@@ -31268,31 +31282,56 @@ async function reactToComment(octokit, owner, repo, commentId, content) {
  * against the requested repo before minting.
  */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AppNotInstalledError = void 0;
 exports.fetchAppToken = fetchAppToken;
+const FETCH_TIMEOUT_MS = 10_000;
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+const MAX_ATTEMPTS = 2;
+/** The minter responded 404: the ReviewAlly App is not installed on the repo. */
+class AppNotInstalledError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'AppNotInstalledError';
+    }
+}
+exports.AppNotInstalledError = AppNotInstalledError;
 async function fetchAppToken(endpoint, workflowToken, repo) {
-    let res;
-    try {
-        res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${workflowToken}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'reviewally-action',
-            },
-            body: JSON.stringify({ repo }),
-        });
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        let res;
+        try {
+            res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${workflowToken}`,
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'reviewally-action',
+                },
+                body: JSON.stringify({ repo }),
+                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            });
+        }
+        catch (err) {
+            lastError = new Error(`could not reach app-token endpoint: ${err.message}`);
+            continue;
+        }
+        const body = (await res.json().catch(() => ({})));
+        if (!res.ok) {
+            const msg = body.error ? `${res.status}: ${body.error}` : `HTTP ${res.status}`;
+            if (res.status === 404)
+                throw new AppNotInstalledError(msg);
+            if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_ATTEMPTS) {
+                lastError = new Error(msg);
+                continue;
+            }
+            throw new Error(msg);
+        }
+        if (!body.token) {
+            throw new Error('endpoint returned no token');
+        }
+        return { token: body.token, expiresAt: body.expires_at };
     }
-    catch (err) {
-        throw new Error(`could not reach app-token endpoint: ${err.message}`);
-    }
-    const body = (await res.json().catch(() => ({})));
-    if (!res.ok) {
-        throw new Error(body.error ? `${res.status}: ${body.error}` : `HTTP ${res.status}`);
-    }
-    if (!body.token) {
-        throw new Error('endpoint returned no token');
-    }
-    return { token: body.token, expiresAt: body.expires_at };
+    throw lastError ?? new Error('app-token fetch failed');
 }
 
 
@@ -31442,7 +31481,12 @@ async function run() {
                 core.info(`Using ReviewAlly app token (expires ${appToken.expiresAt ?? 'soon'}).`);
             }
             catch (err) {
-                core.warning(`Branded bot unavailable (${err.message}); posting as the default workflow identity instead.`);
+                if (err instanceof app_token_1.AppNotInstalledError) {
+                    core.info(`ReviewAlly app is not installed on ${owner}/${repo} — install it at https://github.com/apps/reviewally for branded reviews. Posting as the default workflow identity.`);
+                }
+                else {
+                    core.warning(`Branded bot unavailable (${err.message}); this looks like a minter or configuration issue rather than a missing installation — check app-token-url. Posting as the default workflow identity.`);
+                }
             }
         }
         const octokit = (0, github_1.getOctokit)(githubToken);

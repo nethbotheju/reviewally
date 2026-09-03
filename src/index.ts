@@ -2,7 +2,7 @@ import * as core from '@actions/core';
 import { getOctokit } from '@actions/github';
 import { getInputs } from './config/inputs';
 import { resolveTrigger } from './github/trigger';
-import { fetchAppToken } from './github/app-token';
+import { fetchAppToken, AppNotInstalledError } from './github/app-token';
 import {
   fetchFileContents,
   fetchPullRequest,
@@ -53,9 +53,15 @@ async function run(): Promise<void> {
         githubToken = appToken.token;
         core.info(`Using ReviewAlly app token (expires ${appToken.expiresAt ?? 'soon'}).`);
       } catch (err) {
-        core.warning(
-          `Branded bot unavailable (${(err as Error).message}); posting as the default workflow identity instead.`,
-        );
+        if (err instanceof AppNotInstalledError) {
+          core.info(
+            `ReviewAlly app is not installed on ${owner}/${repo} — install it at https://github.com/apps/reviewally for branded reviews. Posting as the default workflow identity.`,
+          );
+        } else {
+          core.warning(
+            `Branded bot unavailable (${(err as Error).message}); this looks like a minter or configuration issue rather than a missing installation — check app-token-url. Posting as the default workflow identity.`,
+          );
+        }
       }
     }
 

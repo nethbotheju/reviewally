@@ -1,4 +1,8 @@
-# ReviewAlly — AI Code Review GitHub Action
+<div align="center">
+  <img src="images/robot-mascot-squircle.png" alt="ReviewAlly mascot" width="140" />
+  <h1>ReviewAlly</h1>
+  <p><strong>AI Code Review GitHub Action</strong></p>
+</div>
 
 A reusable GitHub Action that performs **AI-powered code review on pull requests**.
 Bring your own key (BYOK) and choose your model — OpenAI, any OpenAI-compatible
