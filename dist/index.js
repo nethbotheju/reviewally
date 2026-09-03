@@ -31016,6 +31016,7 @@ function getInputs() {
     }
     const model = core.getInput('model', { required: true });
     const githubToken = core.getInput('github-token', { required: true });
+    const appTokenUrl = core.getInput('app-token-url').trim() || undefined;
     const triggerComment = core.getInput('trigger-comment').trim() || '/ai-review';
     const triggerLabel = core.getInput('trigger-label').trim() || 'ai-review';
     const autoReview = core.getBooleanInput('auto-review');
@@ -31042,6 +31043,7 @@ function getInputs() {
         baseUrl,
         model,
         githubToken,
+        appTokenUrl,
         triggerComment,
         triggerLabel,
         autoReview,
@@ -31255,6 +31257,47 @@ async function reactToComment(octokit, owner, repo, commentId, content) {
 
 /***/ }),
 
+/***/ 9624:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/**
+ * Fetch a short-lived, repo-scoped GitHub App token from the ReviewAlly minter.
+ * The workflow's GITHUB_TOKEN authenticates the request; the minter verifies it
+ * against the requested repo before minting.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.fetchAppToken = fetchAppToken;
+async function fetchAppToken(endpoint, workflowToken, repo) {
+    let res;
+    try {
+        res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${workflowToken}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'reviewally-action',
+            },
+            body: JSON.stringify({ repo }),
+        });
+    }
+    catch (err) {
+        throw new Error(`could not reach app-token endpoint: ${err.message}`);
+    }
+    const body = (await res.json().catch(() => ({})));
+    if (!res.ok) {
+        throw new Error(body.error ? `${res.status}: ${body.error}` : `HTTP ${res.status}`);
+    }
+    if (!body.token) {
+        throw new Error('endpoint returned no token');
+    }
+    return { token: body.token, expiresAt: body.expires_at };
+}
+
+
+/***/ }),
+
 /***/ 7131:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -31368,6 +31411,7 @@ const core = __importStar(__nccwpck_require__(7484));
 const github_1 = __nccwpck_require__(3228);
 const inputs_1 = __nccwpck_require__(4389);
 const trigger_1 = __nccwpck_require__(7131);
+const app_token_1 = __nccwpck_require__(9624);
 const api_1 = __nccwpck_require__(8943);
 const prompt_1 = __nccwpck_require__(4663);
 const parse_1 = __nccwpck_require__(9742);
@@ -31387,7 +31431,21 @@ async function run() {
             return;
         }
         const { owner, repo, pullNumber, commentId } = trigger.review;
-        const octokit = (0, github_1.getOctokit)(inputs.githubToken);
+        // Branded bot: swap the workflow identity for the ReviewAlly App identity
+        // when a minter endpoint is configured. Falls back gracefully.
+        let githubToken = inputs.githubToken;
+        if (inputs.appTokenUrl) {
+            try {
+                const appToken = await (0, app_token_1.fetchAppToken)(inputs.appTokenUrl, inputs.githubToken, `${owner}/${repo}`);
+                core.setSecret(appToken.token);
+                githubToken = appToken.token;
+                core.info(`Using ReviewAlly app token (expires ${appToken.expiresAt ?? 'soon'}).`);
+            }
+            catch (err) {
+                core.warning(`Branded bot unavailable (${err.message}); posting as the default workflow identity instead.`);
+            }
+        }
+        const octokit = (0, github_1.getOctokit)(githubToken);
         if (commentId)
             await (0, api_1.reactToComment)(octokit, owner, repo, commentId, 'eyes');
         const pr = await (0, api_1.fetchPullRequest)(octokit, owner, repo, pullNumber);
@@ -32217,7 +32275,7 @@ function formatReview(doc, files) {
         }
     }
     out.push('');
-    out.push('---', '_Automated review using AI Code Review._');
+    out.push('---', '_Automated review using ReviewAlly._');
     return out.join('\n');
 }
 function formatNoChanges() {
@@ -32227,7 +32285,7 @@ function formatNoChanges() {
         'No reviewable code changes were found (only excluded, generated, deleted, or binary files).',
         '',
         '---',
-        '_Automated review using AI Code Review._',
+        '_Automated review using ReviewAlly._',
     ].join('\n');
 }
 function cell(text) {

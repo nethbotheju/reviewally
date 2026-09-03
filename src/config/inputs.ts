@@ -42,6 +42,7 @@ export function getInputs(): ActionInputs {
 
   const model = core.getInput('model', { required: true });
   const githubToken = core.getInput('github-token', { required: true });
+  const appTokenUrl = core.getInput('app-token-url').trim() || undefined;
   const triggerComment = core.getInput('trigger-comment').trim() || '/ai-review';
   const triggerLabel = core.getInput('trigger-label').trim() || 'ai-review';
   const autoReview = core.getBooleanInput('auto-review');
@@ -77,6 +78,7 @@ export function getInputs(): ActionInputs {
     baseUrl,
     model,
     githubToken,
+    appTokenUrl,
     triggerComment,
     triggerLabel,
     autoReview,

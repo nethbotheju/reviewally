@@ -1,9 +1,9 @@
-name: 'AI Code Review'
-description: 'AI-powered pull request code review. Bring your own key (OpenAI, OpenAI-compatible, or Anthropic). Triggered by a label or a slash command.'
-author: 'your-org'
+name: 'ReviewAlly'
+description: 'ReviewAlly — AI-powered pull request code review. Bring your own key (OpenAI, OpenAI-compatible, or Anthropic). Triggered by a label or a slash command.'
+author: 'nethbotheju'
 branding:
   icon: 'eye'
-  color: 'purple'
+  color: 'green'
 
 inputs:
   api-type:
@@ -23,6 +23,10 @@ inputs:
     description: 'GitHub token used to read the PR and post the review. Defaults to the automatic workflow token.'
     required: false
     default: ${{ github.token }}
+  app-token-url:
+    description: 'Endpoint of a ReviewAlly token minter (see minter/README.md). When set, the review is posted with the ReviewAlly GitHub App identity (custom name + logo) instead of github-actions[bot]. Consumers only need the App installed — no secrets. Falls back to the workflow identity if the App is not installed.'
+    required: false
+    default: ''
 
   trigger-comment:
     description: 'Slash command that triggers a review on a PR comment (case-insensitive).'

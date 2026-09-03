@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import { getOctokit } from '@actions/github';
 import { getInputs } from './config/inputs';
 import { resolveTrigger } from './github/trigger';
+import { fetchAppToken } from './github/app-token';
 import {
   fetchFileContents,
   fetchPullRequest,
@@ -37,7 +38,28 @@ async function run(): Promise<void> {
     }
 
     const { owner, repo, pullNumber, commentId } = trigger.review;
-    const octokit = getOctokit(inputs.githubToken);
+
+    // Branded bot: swap the workflow identity for the ReviewAlly App identity
+    // when a minter endpoint is configured. Falls back gracefully.
+    let githubToken = inputs.githubToken;
+    if (inputs.appTokenUrl) {
+      try {
+        const appToken = await fetchAppToken(
+          inputs.appTokenUrl,
+          inputs.githubToken,
+          `${owner}/${repo}`,
+        );
+        core.setSecret(appToken.token);
+        githubToken = appToken.token;
+        core.info(`Using ReviewAlly app token (expires ${appToken.expiresAt ?? 'soon'}).`);
+      } catch (err) {
+        core.warning(
+          `Branded bot unavailable (${(err as Error).message}); posting as the default workflow identity instead.`,
+        );
+      }
+    }
+
+    const octokit = getOctokit(githubToken);
 
     if (commentId) await reactToComment(octokit, owner, repo, commentId, 'eyes');
 

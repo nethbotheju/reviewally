@@ -1,0 +1,10 @@
+name = "reviewally-minter"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Custom domain (requires nethbotheju.dev to be a zone in the same Cloudflare
+# account). The plain `reviewally.` subdomain is reserved for a future
+# ReviewAlly website, so the API lives one level deeper.
+routes = [
+  { pattern = "api.reviewally.nethbotheju.dev", custom_domain = true }
+]

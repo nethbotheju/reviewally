@@ -9,6 +9,7 @@ export interface ActionInputs {
   baseUrl?: string;
   model: string;
   githubToken: string;
+  appTokenUrl?: string;
   triggerComment: string;
   triggerLabel: string;
   autoReview: boolean;
