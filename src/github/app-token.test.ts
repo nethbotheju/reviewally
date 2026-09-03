@@ -27,11 +27,14 @@ describe('fetchAppToken', () => {
     const out = await fetchAppToken('https://minter.example/token', 'ghs_wf', 'owner/name');
 
     expect(out).toEqual({ token: 'ghs_minted', expiresAt: '2025-01-01T00:00:00Z' });
-    const [url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
-      .calls[0] as unknown as [string, RequestInit];
+    const [url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe('https://minter.example/token');
     expect(init.method).toBe('POST');
-    expect(String(init.headers)).toContain('Bearer ghs_wf');
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer ghs_wf');
     expect(JSON.parse(String(init.body))).toEqual({ repo: 'owner/name' });
   });
 
@@ -44,9 +47,9 @@ describe('fetchAppToken', () => {
   });
 
   it('handles non-JSON error bodies', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response('bad gateway', { status: 502 }),
-    ) as unknown as typeof fetch;
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response('bad gateway', { status: 502 })) as unknown as typeof fetch;
 
     await expect(
       fetchAppToken('https://minter.example/token', 'ghs_wf', 'owner/name'),
@@ -54,7 +57,9 @@ describe('fetchAppToken', () => {
   });
 
   it('wraps network failures', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
+    globalThis.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
 
     await expect(
       fetchAppToken('https://minter.example/token', 'ghs_wf', 'owner/name'),
