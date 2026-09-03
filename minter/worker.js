@@ -40,7 +40,12 @@ export default {
       return reply(400, { error: 'invalid repo; expected "owner/name"' });
     }
 
-    if (!rateLimit(repo)) return reply(429, { error: 'rate limit exceeded, retry later' });
+    // Only workflow GITHUB_TOKENs may mint: they are server-to-server
+    // installation tokens (ghs_ prefix). PATs (ghp_/github_pat_) and user
+    // OAuth tokens (gho_) are rejected regardless of repo read access.
+    if (!/^ghs_/.test(workflowToken)) {
+      return reply(401, { error: 'app tokens can only be minted with a workflow GITHUB_TOKEN' });
+    }
 
     // Validate the caller's workflow token can actually access this repo.
     const check = await gh(`/repos/${repo}`, `Bearer ${workflowToken}`);
@@ -48,6 +53,9 @@ export default {
       console.error(`repo validation failed with ${check.status}`);
       return reply(401, { error: 'token is not valid for this repo' });
     }
+
+    // Count only validated callers so junk traffic cannot exhaust the quota.
+    if (!rateLimit(repo)) return reply(429, { error: 'rate limit exceeded, retry later' });
 
     let jwt;
     try {

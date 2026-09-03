@@ -63,11 +63,12 @@ curl -X POST https://api.reviewally.nethbotheju.dev/token \
 - Minted tokens are **scoped to a single repository**, carry only
   `contents: read`, `pull_requests: write`, `issues: write`, and expire in
   **1 hour**.
-- The caller must present a GitHub token that is valid for the requested repo
-  (the action sends the run's `GITHUB_TOKEN`), and the App must be installed
-  on that repo — otherwise no token is minted.
-- Best-effort per-repo rate limiting (30 mints/hour) complements GitHub's own
-  throttling.
+- The caller must present a **workflow `GITHUB_TOKEN`** — the minter rejects
+  PATs and user tokens outright (server-to-server `ghs_` check) and verifies
+  the token is valid for the requested repo. The App must be installed on
+  that repo — otherwise no token is minted.
+- Best-effort per-repo rate limiting (30 mints/hour, counted only after the
+  caller is validated) complements GitHub's own throttling.
 - Residual risk (shared by all public App-token minters): anyone with read
   access to a repo where ReviewAlly is installed could mint a PR-scoped token
   for that repo. The scoped permissions and short TTL bound what that token
