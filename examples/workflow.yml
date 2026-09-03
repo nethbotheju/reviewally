@@ -1,12 +1,12 @@
-# AI code review — standard review (single-pass over the diff).
-# Copy into your repo at .github/workflows/ai-code-review.yml and pin the action to @v1.
+# ReviewAlly — copy into your repo at .github/workflows/reviewally.yml
+#
+# Requires: the ReviewAlly App installed (github.com/apps/reviewally) and one
+# repository secret: REVIEWALLY_API_KEY (your provider API key).
 #
 # Triggers: add the "ai-review" label to a PR, or comment "/ai-review".
 # Set auto-review: 'true' to also review on open / reopen / push.
-#
-# Required secret: AI_CODE_REVIEW_LLM_API_KEY (your provider API key).
 
-name: ai-code-review
+name: reviewally
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ on:
     types: [created]
 
 concurrency:
-  group: ai-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: reviewally-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
@@ -31,10 +31,13 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: nethbotheju/ai-code-review@v1
+      - uses: nethbotheju/reviewally@v1
         with:
+          app-token-url: https://api.reviewally.nethbotheju.dev/token
           api-type: openai            # openai | openai-chat-compatible | anthropic
           model: gpt-4o
-          api-key: ${{ secrets.AI_CODE_REVIEW_LLM_API_KEY }}
-          # auto-review: 'true'         # review on open/reopen/push automatically
-          # extra-instructions: '...'   # extra guidance appended to the prompt
+          api-key: ${{ secrets.REVIEWALLY_API_KEY }}
+          # base-url: 'https://opencode.ai/zen/go/v1'   # only for openai-chat-compatible
+          # review-mode: agent         # deep repo-aware investigation
+          # auto-review: 'true'
+          # extra-instructions: '...'

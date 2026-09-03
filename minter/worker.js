@@ -1,24 +1,18 @@
-// ReviewAlly token minter.
-// Holds the ReviewAlly GitHub App private key (as a Worker secret) and mints
-// short-lived, repo-scoped installation tokens for the action, so consumers
-// never need APP_ID / APP_PRIVATE_KEY secrets.
+// ReviewAlly token minter: exchanges a workflow GITHUB_TOKEN for a short-lived,
+// repo-scoped ReviewAlly App installation token.
 //
-// POST /token
-//   Authorization: Bearer <workflow GITHUB_TOKEN of the calling run>
-//   { "repo": "owner/name" }
-// -> 200 { "token": "...", "expires_at": "..." }
-// -> 401 token not valid for that repo
-// -> 404 ReviewAlly is not installed on that repo
+// POST /token  { "repo": "owner/name" }
+// -> 200 { "token", "expires_at" } | 401 bad caller | 404 App not installed | 429 rate limited
 
 import { pemToDer, toPkcs8 } from './crypto.js';
 
 const API = 'https://api.github.com';
 const TOKEN_TTL_SECONDS = 3600;
 const PER_REPO_HOURLY_LIMIT = 30;
-const JWT_CACHE_MS = 120_000; // JWTs are valid ~3 min; caching 2 min keeps a safety window
+const JWT_CACHE_MS = 120_000;
 
 let cachedKey = null;
-let cachedJwt = null; // { value, expMs }
+let cachedJwt = null;
 
 export default {
   async fetch(request, env) {
@@ -40,9 +34,7 @@ export default {
       return reply(400, { error: 'invalid repo; expected "owner/name"' });
     }
 
-    // Only workflow GITHUB_TOKENs may mint: they are server-to-server
-    // installation tokens (ghs_ prefix). PATs (ghp_/github_pat_) and user
-    // OAuth tokens (gho_) are rejected regardless of repo read access.
+    // Only workflow GITHUB_TOKENs (server-to-server ghs_) may mint.
     if (!/^ghs_/.test(workflowToken)) {
       return reply(401, { error: 'app tokens can only be minted with a workflow GITHUB_TOKEN' });
     }
@@ -54,7 +46,7 @@ export default {
       return reply(401, { error: 'token is not valid for this repo' });
     }
 
-    // Count only validated callers so junk traffic cannot exhaust the quota.
+    // Count only validated callers.
     if (!rateLimit(repo)) return reply(429, { error: 'rate limit exceeded, retry later' });
 
     let jwt;
@@ -111,8 +103,7 @@ function reply(status, body) {
   });
 }
 
-// Best-effort per-isolate rate limit (Worker isolates are ephemeral; this
-// complements GitHub's own throttling, not a hard guarantee).
+// Best-effort per-isolate rate limit.
 const hits = new Map();
 function rateLimit(repo) {
   const now = Date.now();
