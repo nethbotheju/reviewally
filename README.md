@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="images/robot-mascot-squircle.png" alt="ReviewAlly mascot" width="140" />
+  <img src="images/robot-mascot-squircle-clean.png" alt="ReviewAlly mascot" width="140" />
   <h1>ReviewAlly</h1>
   <p><strong>AI Code Review GitHub Action</strong></p>
 </div>
