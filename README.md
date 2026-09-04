@@ -25,9 +25,10 @@ ReviewAlly reads your pull request diff through the GitHub API and posts a struc
 
 ## Features
 
-- **Bring your own model** — works with OpenAI, Anthropic, and any OpenAI-compatible endpoint (OpenRouter, Together, Ollama, vLLM, LM Studio…).
-- **Two review modes** — a focused diff review, or an agent mode that investigates the repository before judging a change.
-- **On your terms** — trigger with the `ai-review` label, the `/ai-review` comment, or automatically on every push.
+- **Bring your own key:** OpenAI, Anthropic, or any OpenAI-compatible endpoint — your model, your billing.
+- **Two review modes:** fast diff review, or agent mode that investigates your repo first.
+- **On your terms:** trigger by label, slash command, or automatically.
+- **Structured reviews:** background, per-file changes, prioritized recommendations.
 
 ## Quick start
 
