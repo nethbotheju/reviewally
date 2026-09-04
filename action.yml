@@ -1,5 +1,5 @@
 name: 'ReviewAlly'
-description: 'ReviewAlly — AI-powered pull request code review. Bring your own key (OpenAI, OpenAI-compatible, or Anthropic). Triggered by a label or a slash command.'
+description: 'ReviewAlly — AI-powered pull request code review. Bring your own model & API key (OpenAI, OpenAI-compatible, or Anthropic). Two review modes: fast diff review, or agent investigation. Triggered by a label, slash command, or automatically.'
 author: 'nethbotheju'
 branding:
   icon: 'shield'
