@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/nethbotheju/reviewally/actions/workflows/build.yml"><img src="https://github.com/nethbotheju/reviewally/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
-  <a href="https://github.com/nethbotheju/reviewally/releases"><img src="https://img.shields.io/github/v/release/nethbotheju/reviewally?label=release" alt="Release" /></a>
+  <a href="https://github.com/nethbotheju/reviewally/releases"><img src="https://img.shields.io/github/v/tag/nethbotheju/reviewally?label=release" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/nethbotheju/reviewally?color=blue" alt="License" /></a>
   <a href="#support"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome" /></a>
 </p>
