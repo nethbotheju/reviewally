@@ -31535,11 +31535,18 @@ async function run() {
             : await (0, runner_1.runStandardReview)((0, models_1.createModel)(inputs), systemPrompt, userPrompt);
         core.info(`Review done. tokens in=${reviewResult.inputTokens} out=${reviewResult.outputTokens} tot=${reviewResult.totalTokens} steps=${reviewResult.steps}`);
         // Parse, format, post
+        let repaired = false;
         const doc = (0, parse_1.parseReview)(reviewResult.text, {
-            onRepair: () => core.warning('Model response was not strict JSON and was automatically repaired; the posted review may be incomplete.'),
+            onRepair: () => {
+                repaired = true;
+            },
         });
         const body = (0, format_1.formatReview)(doc, fetchResult.files);
         await (0, api_1.postReview)(octokit, owner, repo, pullNumber, pr.headSha, body, []);
+        if (repaired) {
+            const preview = reviewResult.text.length > 400 ? `${reviewResult.text.slice(0, 400)}…` : reviewResult.text;
+            core.warning(`Model response was not strict JSON and was automatically repaired; the posted review may be incomplete. Raw model response was:\n${preview}`);
+        }
         core.setOutput('summary', doc.solution || doc.background);
         core.info('Posted review.');
         if (commentId)

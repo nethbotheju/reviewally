@@ -138,14 +138,21 @@ async function run(): Promise<void> {
     );
 
     // Parse, format, post
+    let repaired = false;
     const doc = parseReview(reviewResult.text, {
-      onRepair: () =>
-        core.warning(
-          'Model response was not strict JSON and was automatically repaired; the posted review may be incomplete.',
-        ),
+      onRepair: () => {
+        repaired = true;
+      },
     });
     const body = formatReview(doc, fetchResult.files);
     await postReview(octokit, owner, repo, pullNumber, pr.headSha, body, []);
+    if (repaired) {
+      const preview =
+        reviewResult.text.length > 400 ? `${reviewResult.text.slice(0, 400)}…` : reviewResult.text;
+      core.warning(
+        `Model response was not strict JSON and was automatically repaired; the posted review may be incomplete. Raw model response was:\n${preview}`,
+      );
+    }
     core.setOutput('summary', doc.solution || doc.background);
 
     core.info('Posted review.');
