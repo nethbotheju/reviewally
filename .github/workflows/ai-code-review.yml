@@ -28,7 +28,7 @@ jobs:
         with:
           app-token-url: https://api.reviewally.nethbotheju.dev/token
           api-type: openai-chat-compatible
-          model: minimax-m3
+          model: deepseek-v4-flash
           base-url: 'https://opencode.ai/zen/go/v1'
           api-key: ${{ secrets.AI_CODE_REVIEW_LLM_API_KEY }}
           auto-review: 'true'

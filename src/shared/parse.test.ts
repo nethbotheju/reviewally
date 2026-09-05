@@ -76,7 +76,9 @@ describe('parseReview', () => {
   });
 
   it('throws on truly malformed JSON', () => {
-    expect(() => parseReview('not json at all')).toThrow(/Could not parse model response|not a JSON object/);
+    expect(() => parseReview('not json at all')).toThrow(
+      /Could not parse model response|not a JSON object/,
+    );
   });
 
   it('throws when the parsed result is an array, not an object', () => {

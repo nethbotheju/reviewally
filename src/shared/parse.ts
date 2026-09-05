@@ -5,7 +5,8 @@ export function parseReview(raw: string): ReviewDocument {
   const text = extractJson(raw);
   const parsed = parseLenient(text);
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    const kind = typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
+    const kind =
+      typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
     throw new Error(
       `Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`,
     );
@@ -27,7 +28,9 @@ export function parseReview(raw: string): ReviewDocument {
     doc.files.length === 0 &&
     doc.recommendations.length === 0
   ) {
-    throw new Error(`Model response contained no review content. Model response was:\n${preview(raw)}`);
+    throw new Error(
+      `Model response contained no review content. Model response was:\n${preview(raw)}`,
+    );
   }
   return doc;
 }
