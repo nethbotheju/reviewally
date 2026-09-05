@@ -21,6 +21,7 @@
     "@ai-sdk/anthropic": "^4.0.20",
     "@ai-sdk/openai": "^4.0.20",
     "ai": "^7.0.37",
+    "jsonrepair": "^3.15.0",
     "minimatch": "^9.0.5",
     "tar": "^7.5.22",
     "vitest": "^4.1.10"
