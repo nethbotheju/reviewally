@@ -93,6 +93,36 @@ describe('parseReview', () => {
     expect(() => parseReview('"just a string"')).toThrow(/not a JSON object/);
   });
 
+  it('reports when the repair path rescued the response', () => {
+    let repaired = false;
+    parseReview("{'background':'b','solution':'s','files':[],'recommendations':[]}", {
+      onRepair: () => {
+        repaired = true;
+      },
+    });
+    expect(repaired).toBe(true);
+  });
+
+  it('does not report repair for strict JSON', () => {
+    let repaired = false;
+    parseReview('{"background":"b","solution":"s","files":[],"recommendations":[]}', {
+      onRepair: () => {
+        repaired = true;
+      },
+    });
+    expect(repaired).toBe(false);
+  });
+
+  it('does not report repair when the cheap cleanup passes suffice', () => {
+    let repaired = false;
+    parseReview('{"background":"b","solution":"s","files":[],"recommendations":[],}', {
+      onRepair: () => {
+        repaired = true;
+      },
+    });
+    expect(repaired).toBe(false);
+  });
+
   it('repairs single-quoted JSON via jsonrepair without mangling apostrophes', () => {
     const broken =
       "{'background':\"this isn't valid JSON\",'solution':'s','files':[],'recommendations':[]}";

@@ -138,7 +138,12 @@ async function run(): Promise<void> {
     );
 
     // Parse, format, post
-    const doc = parseReview(reviewResult.text);
+    const doc = parseReview(reviewResult.text, {
+      onRepair: () =>
+        core.warning(
+          'Model response was not strict JSON and was automatically repaired; the posted review may be incomplete.',
+        ),
+    });
     const body = formatReview(doc, fetchResult.files);
     await postReview(octokit, owner, repo, pullNumber, pr.headSha, body, []);
     core.setOutput('summary', doc.solution || doc.background);

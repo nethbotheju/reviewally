@@ -31535,7 +31535,9 @@ async function run() {
             : await (0, runner_1.runStandardReview)((0, models_1.createModel)(inputs), systemPrompt, userPrompt);
         core.info(`Review done. tokens in=${reviewResult.inputTokens} out=${reviewResult.outputTokens} tot=${reviewResult.totalTokens} steps=${reviewResult.steps}`);
         // Parse, format, post
-        const doc = (0, parse_1.parseReview)(reviewResult.text);
+        const doc = (0, parse_1.parseReview)(reviewResult.text, {
+            onRepair: () => core.warning('Model response was not strict JSON and was automatically repaired; the posted review may be incomplete.'),
+        });
         const body = (0, format_1.formatReview)(doc, fetchResult.files);
         await (0, api_1.postReview)(octokit, owner, repo, pullNumber, pr.headSha, body, []);
         core.setOutput('summary', doc.solution || doc.background);
@@ -32353,9 +32355,9 @@ function capitalize(value) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.parseReview = parseReview;
 const jsonrepair_1 = __nccwpck_require__(2555);
-function parseReview(raw) {
+function parseReview(raw, options = {}) {
     const text = extractJson(raw);
-    const parsed = parseLenient(text);
+    const parsed = parseLenient(text, options.onRepair);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         const kind = typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
         throw new Error(`Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`);
@@ -32397,7 +32399,7 @@ function stripTrailingCommas(text) {
 function stripComments(text) {
     return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
 }
-function parseLenient(text) {
+function parseLenient(text, onRepair) {
     let lastError;
     for (const candidate of [text, stripComments(stripTrailingCommas(text))]) {
         try {
@@ -32410,7 +32412,9 @@ function parseLenient(text) {
     // Last resort: let jsonrepair recover near-JSON (single quotes, unquoted
     // keys, truncation) that the cheap passes above miss.
     try {
-        return JSON.parse((0, jsonrepair_1.jsonrepair)(text));
+        const value = JSON.parse((0, jsonrepair_1.jsonrepair)(text));
+        onRepair?.();
+        return value;
     }
     catch (err) {
         lastError = err;

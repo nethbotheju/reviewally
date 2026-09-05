@@ -1,9 +1,9 @@
 import { jsonrepair } from 'jsonrepair';
 import type { FileDescription, Recommendation, ReviewDocument } from '../shared/types';
 
-export function parseReview(raw: string): ReviewDocument {
+export function parseReview(raw: string, options: { onRepair?: () => void } = {}): ReviewDocument {
   const text = extractJson(raw);
-  const parsed = parseLenient(text);
+  const parsed = parseLenient(text, options.onRepair);
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     const kind =
       typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
@@ -59,7 +59,7 @@ function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
 }
 
-function parseLenient(text: string): unknown {
+function parseLenient(text: string, onRepair?: () => void): unknown {
   let lastError: unknown;
   for (const candidate of [text, stripComments(stripTrailingCommas(text))]) {
     try {
@@ -71,7 +71,9 @@ function parseLenient(text: string): unknown {
   // Last resort: let jsonrepair recover near-JSON (single quotes, unquoted
   // keys, truncation) that the cheap passes above miss.
   try {
-    return JSON.parse(jsonrepair(text));
+    const value = JSON.parse(jsonrepair(text));
+    onRepair?.();
+    return value;
   } catch (err) {
     lastError = err;
   }
