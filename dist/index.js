@@ -31461,6 +31461,8 @@ const runner_2 = __nccwpck_require__(8810);
 const snapshot_1 = __nccwpck_require__(9244);
 async function run() {
     let repoRoot;
+    let repaired = false;
+    let modelResponse = '';
     try {
         const inputs = (0, inputs_1.getInputs)();
         core.setSecret(inputs.apiKey);
@@ -31535,9 +31537,17 @@ async function run() {
             : await (0, runner_1.runStandardReview)((0, models_1.createModel)(inputs), systemPrompt, userPrompt);
         core.info(`Review done. tokens in=${reviewResult.inputTokens} out=${reviewResult.outputTokens} tot=${reviewResult.totalTokens} steps=${reviewResult.steps}`);
         // Parse, format, post
-        const doc = (0, parse_1.parseReview)(reviewResult.text);
+        modelResponse = reviewResult.text;
+        const doc = (0, parse_1.parseReview)(reviewResult.text, {
+            onRepair: () => {
+                repaired = true;
+            },
+        });
         const body = (0, format_1.formatReview)(doc, fetchResult.files);
         await (0, api_1.postReview)(octokit, owner, repo, pullNumber, pr.headSha, body, []);
+        if (repaired) {
+            core.warning((0, format_1.formatRepairWarning)(reviewResult.text));
+        }
         core.setOutput('summary', doc.solution || doc.background);
         core.info('Posted review.');
         if (commentId)
@@ -31545,7 +31555,13 @@ async function run() {
     }
     catch (err) {
         const e = err;
-        core.setFailed(`AI code review failed: ${e.message}${e.stack ? `\n${e.stack}` : ''}`);
+        if (modelResponse) {
+            core.startGroup('Full model response');
+            core.info(modelResponse);
+            core.endGroup();
+        }
+        const repairNote = repaired ? ' (note: the model response had required JSON repair)' : '';
+        core.setFailed(`AI code review failed: ${e.message}${repairNote}${e.stack ? `\n${e.stack}` : ''}`);
     }
     finally {
         if (repoRoot) {
@@ -32284,6 +32300,7 @@ async function runStandardReview(model, instructions, userMessage) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.formatReview = formatReview;
 exports.formatNoChanges = formatNoChanges;
+exports.formatRepairWarning = formatRepairWarning;
 const CHANGE_TYPE = {
     added: 'Added',
     modified: 'Modified',
@@ -32332,6 +32349,13 @@ function formatNoChanges() {
         '_Automated review using ReviewAlly._',
     ].join('\n');
 }
+function formatRepairWarning(preview) {
+    return [
+        'Model response was not strict JSON and was automatically repaired;',
+        'the posted review may be incomplete.',
+        `Raw model response was:\n${preview}`,
+    ].join(' ');
+}
 function cell(text) {
     return text.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
 }
@@ -32353,14 +32377,15 @@ function capitalize(value) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.parseReview = parseReview;
 const jsonrepair_1 = __nccwpck_require__(2555);
-function parseReview(raw) {
+const util_1 = __nccwpck_require__(1125);
+function parseReview(raw, options = {}) {
     const text = extractJson(raw);
-    const parsed = parseLenient(text);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        const kind = typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
-        throw new Error(`Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`);
+    const { value, repaired } = parseLenient(text);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        const kind = typeof value === 'object' ? (Array.isArray(value) ? 'array' : 'null') : typeof value;
+        throw new Error(`Model response was not a JSON object: ${kind}. Model response was:\n${(0, util_1.truncate)(raw, 400)}`);
     }
-    const obj = parsed;
+    const obj = value;
     const doc = {
         background: asString(obj.background),
         solution: asString(obj.solution),
@@ -32373,12 +32398,12 @@ function parseReview(raw) {
         !doc.solution &&
         doc.files.length === 0 &&
         doc.recommendations.length === 0) {
-        throw new Error(`Model response contained no review content. Model response was:\n${preview(raw)}`);
+        throw new Error(`Model response contained no review content. Model response was:\n${(0, util_1.truncate)(raw, 400)}`);
     }
+    // Fire only once a repaired doc has passed validation and will be posted.
+    if (repaired)
+        options.onRepair?.();
     return doc;
-}
-function preview(text) {
-    return text.length > 400 ? `${text.slice(0, 400)}…` : text;
 }
 function extractJson(raw) {
     let text = raw.trim();
@@ -32401,7 +32426,7 @@ function parseLenient(text) {
     let lastError;
     for (const candidate of [text, stripComments(stripTrailingCommas(text))]) {
         try {
-            return JSON.parse(candidate);
+            return { value: JSON.parse(candidate), repaired: false };
         }
         catch (err) {
             lastError = err;
@@ -32410,12 +32435,12 @@ function parseLenient(text) {
     // Last resort: let jsonrepair recover near-JSON (single quotes, unquoted
     // keys, truncation) that the cheap passes above miss.
     try {
-        return JSON.parse((0, jsonrepair_1.jsonrepair)(text));
+        return { value: JSON.parse((0, jsonrepair_1.jsonrepair)(text)), repaired: true };
     }
     catch (err) {
         lastError = err;
     }
-    const p = text.length > 400 ? `${text.slice(0, 400)}…` : text;
+    const p = (0, util_1.truncate)(text, 400);
     throw new Error(`Could not parse model response as JSON (${lastError.message}). Model response was:\n${p}`);
 }
 function asString(value) {

@@ -57,6 +57,14 @@ export function formatNoChanges(): string {
   ].join('\n');
 }
 
+export function formatRepairWarning(preview: string): string {
+  return [
+    'Model response was not strict JSON and was automatically repaired;',
+    'the posted review may be incomplete.',
+    `Raw model response was:\n${preview}`,
+  ].join(' ');
+}
+
 function cell(text: string): string {
   return text.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
 }

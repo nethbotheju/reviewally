@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatNoChanges, formatReview } from './format';
+import { formatNoChanges, formatRepairWarning, formatReview } from './format';
 import type { ChangedFile, ReviewDocument } from './types';
 
 const file = (overrides: Partial<ChangedFile> = {}): ChangedFile => ({
@@ -101,5 +101,15 @@ describe('formatNoChanges', () => {
     expect(out).toContain('### Issue / Background');
     expect(out).toContain('No reviewable code changes');
     expect(out).toContain('Automated review using ReviewAlly');
+  });
+});
+
+describe('formatRepairWarning', () => {
+  it('states the response was repaired and embeds the raw preview', () => {
+    const out = formatRepairWarning("{'background':'b'}");
+    expect(out).toContain('not strict JSON');
+    expect(out).toContain('automatically repaired');
+    expect(out).toContain('may be incomplete');
+    expect(out).toContain("{'background':'b'}");
   });
 });
