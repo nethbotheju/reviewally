@@ -1,4 +1,5 @@
 import { jsonrepair } from 'jsonrepair';
+import { truncate } from './util';
 import type { FileDescription, Recommendation, ReviewDocument } from '../shared/types';
 
 export function parseReview(raw: string, options: { onRepair?: () => void } = {}): ReviewDocument {
@@ -8,7 +9,7 @@ export function parseReview(raw: string, options: { onRepair?: () => void } = {}
     const kind =
       typeof value === 'object' ? (Array.isArray(value) ? 'array' : 'null') : typeof value;
     throw new Error(
-      `Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`,
+      `Model response was not a JSON object: ${kind}. Model response was:\n${truncate(raw, 400)}`,
     );
   }
   const obj = value as Record<string, unknown>;
@@ -29,16 +30,12 @@ export function parseReview(raw: string, options: { onRepair?: () => void } = {}
     doc.recommendations.length === 0
   ) {
     throw new Error(
-      `Model response contained no review content. Model response was:\n${preview(raw)}`,
+      `Model response contained no review content. Model response was:\n${truncate(raw, 400)}`,
     );
   }
   // Fire only once a repaired doc has passed validation and will be posted.
   if (repaired) options.onRepair?.();
   return doc;
-}
-
-function preview(text: string): string {
-  return text.length > 400 ? `${text.slice(0, 400)}…` : text;
 }
 
 function extractJson(raw: string): string {
@@ -77,7 +74,7 @@ function parseLenient(text: string): { value: unknown; repaired: boolean } {
   } catch (err) {
     lastError = err;
   }
-  const p = text.length > 400 ? `${text.slice(0, 400)}…` : text;
+  const p = truncate(text, 400);
   throw new Error(
     `Could not parse model response as JSON (${(lastError as Error).message}). Model response was:\n${p}`,
   );

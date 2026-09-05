@@ -12,7 +12,7 @@ import {
 } from './github/api';
 import { buildAgentSystemPrompt, buildSystemPrompt, buildUserPrompt } from './shared/prompt';
 import { parseReview } from './shared/parse';
-import { formatNoChanges, formatReview } from './shared/format';
+import { formatNoChanges, formatRepairWarning, formatReview } from './shared/format';
 import { runStandardReview } from './modes/standard/runner';
 import { createModel } from './modes/standard/models';
 import { runAgentReview } from './modes/agent/runner';
@@ -26,6 +26,8 @@ import type { ActionInputs, RepoRoot } from './config/types';
 
 async function run(): Promise<void> {
   let repoRoot: RepoRoot | undefined;
+  let repaired = false;
+  let modelResponse = '';
 
   try {
     const inputs = getInputs();
@@ -138,7 +140,7 @@ async function run(): Promise<void> {
     );
 
     // Parse, format, post
-    let repaired = false;
+    modelResponse = reviewResult.text;
     const doc = parseReview(reviewResult.text, {
       onRepair: () => {
         repaired = true;
@@ -147,11 +149,7 @@ async function run(): Promise<void> {
     const body = formatReview(doc, fetchResult.files);
     await postReview(octokit, owner, repo, pullNumber, pr.headSha, body, []);
     if (repaired) {
-      const preview =
-        reviewResult.text.length > 400 ? `${reviewResult.text.slice(0, 400)}…` : reviewResult.text;
-      core.warning(
-        `Model response was not strict JSON and was automatically repaired; the posted review may be incomplete. Raw model response was:\n${preview}`,
-      );
+      core.warning(formatRepairWarning(reviewResult.text));
     }
     core.setOutput('summary', doc.solution || doc.background);
 
@@ -159,7 +157,15 @@ async function run(): Promise<void> {
     if (commentId) await reactToComment(octokit, owner, repo, commentId, '+1');
   } catch (err) {
     const e = err as Error;
-    core.setFailed(`AI code review failed: ${e.message}${e.stack ? `\n${e.stack}` : ''}`);
+    if (modelResponse) {
+      core.startGroup('Full model response');
+      core.info(modelResponse);
+      core.endGroup();
+    }
+    const repairNote = repaired ? ' (note: the model response had required JSON repair)' : '';
+    core.setFailed(
+      `AI code review failed: ${e.message}${repairNote}${e.stack ? `\n${e.stack}` : ''}`,
+    );
   } finally {
     if (repoRoot) {
       try {
