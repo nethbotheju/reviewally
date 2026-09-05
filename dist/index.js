@@ -32357,12 +32357,12 @@ exports.parseReview = parseReview;
 const jsonrepair_1 = __nccwpck_require__(2555);
 function parseReview(raw, options = {}) {
     const text = extractJson(raw);
-    const parsed = parseLenient(text, options.onRepair);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        const kind = typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
+    const { value, repaired } = parseLenient(text);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        const kind = typeof value === 'object' ? (Array.isArray(value) ? 'array' : 'null') : typeof value;
         throw new Error(`Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`);
     }
-    const obj = parsed;
+    const obj = value;
     const doc = {
         background: asString(obj.background),
         solution: asString(obj.solution),
@@ -32377,6 +32377,9 @@ function parseReview(raw, options = {}) {
         doc.recommendations.length === 0) {
         throw new Error(`Model response contained no review content. Model response was:\n${preview(raw)}`);
     }
+    // Fire only once a repaired doc has passed validation and will be posted.
+    if (repaired)
+        options.onRepair?.();
     return doc;
 }
 function preview(text) {
@@ -32399,11 +32402,11 @@ function stripTrailingCommas(text) {
 function stripComments(text) {
     return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
 }
-function parseLenient(text, onRepair) {
+function parseLenient(text) {
     let lastError;
     for (const candidate of [text, stripComments(stripTrailingCommas(text))]) {
         try {
-            return JSON.parse(candidate);
+            return { value: JSON.parse(candidate), repaired: false };
         }
         catch (err) {
             lastError = err;
@@ -32412,9 +32415,7 @@ function parseLenient(text, onRepair) {
     // Last resort: let jsonrepair recover near-JSON (single quotes, unquoted
     // keys, truncation) that the cheap passes above miss.
     try {
-        const value = JSON.parse((0, jsonrepair_1.jsonrepair)(text));
-        onRepair?.();
-        return value;
+        return { value: JSON.parse((0, jsonrepair_1.jsonrepair)(text)), repaired: true };
     }
     catch (err) {
         lastError = err;

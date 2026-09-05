@@ -3,15 +3,15 @@ import type { FileDescription, Recommendation, ReviewDocument } from '../shared/
 
 export function parseReview(raw: string, options: { onRepair?: () => void } = {}): ReviewDocument {
   const text = extractJson(raw);
-  const parsed = parseLenient(text, options.onRepair);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+  const { value, repaired } = parseLenient(text);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     const kind =
-      typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
+      typeof value === 'object' ? (Array.isArray(value) ? 'array' : 'null') : typeof value;
     throw new Error(
       `Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`,
     );
   }
-  const obj = parsed as Record<string, unknown>;
+  const obj = value as Record<string, unknown>;
 
   const doc = {
     background: asString(obj.background),
@@ -32,6 +32,8 @@ export function parseReview(raw: string, options: { onRepair?: () => void } = {}
       `Model response contained no review content. Model response was:\n${preview(raw)}`,
     );
   }
+  // Fire only once a repaired doc has passed validation and will be posted.
+  if (repaired) options.onRepair?.();
   return doc;
 }
 
@@ -59,11 +61,11 @@ function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
 }
 
-function parseLenient(text: string, onRepair?: () => void): unknown {
+function parseLenient(text: string): { value: unknown; repaired: boolean } {
   let lastError: unknown;
   for (const candidate of [text, stripComments(stripTrailingCommas(text))]) {
     try {
-      return JSON.parse(candidate);
+      return { value: JSON.parse(candidate), repaired: false };
     } catch (err) {
       lastError = err;
     }
@@ -71,9 +73,7 @@ function parseLenient(text: string, onRepair?: () => void): unknown {
   // Last resort: let jsonrepair recover near-JSON (single quotes, unquoted
   // keys, truncation) that the cheap passes above miss.
   try {
-    const value = JSON.parse(jsonrepair(text));
-    onRepair?.();
-    return value;
+    return { value: JSON.parse(jsonrepair(text)), repaired: true };
   } catch (err) {
     lastError = err;
   }

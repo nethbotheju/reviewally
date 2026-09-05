@@ -93,6 +93,30 @@ describe('parseReview', () => {
     expect(() => parseReview('"just a string"')).toThrow(/not a JSON object/);
   });
 
+  it('does not report repair when the repaired output is not a review object', () => {
+    let repaired = false;
+    expect(() =>
+      parseReview('This change looks good overall, nice work.', {
+        onRepair: () => {
+          repaired = true;
+        },
+      }),
+    ).toThrow(/not a JSON object/);
+    expect(repaired).toBe(false);
+  });
+
+  it('does not report repair when the response cannot be repaired at all', () => {
+    let repaired = false;
+    expect(() =>
+      parseReview('{ of the code }', {
+        onRepair: () => {
+          repaired = true;
+        },
+      }),
+    ).toThrow(/Could not parse model response/);
+    expect(repaired).toBe(false);
+  });
+
   it('reports when the repair path rescued the response', () => {
     let repaired = false;
     parseReview("{'background':'b','solution':'s','files':[],'recommendations':[]}", {
