@@ -38,7 +38,7 @@ export async function prepareRepoSnapshot(
     throw new RepoTooLargeError(Math.round(contentLengthMb * 10) / 10, maxMb);
   }
 
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-'));
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reviewally-'));
   try {
     const tarballPath = path.join(workDir, 'repo.tar.gz');
     fs.writeFileSync(tarballPath, buffer);

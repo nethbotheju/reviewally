@@ -3,7 +3,7 @@
 # Requires: the ReviewAlly App installed (github.com/apps/reviewally) and one
 # repository secret: REVIEWALLY_API_KEY (your provider API key).
 #
-# Triggers: add the "ai-review" label to a PR, or comment "/ai-review".
+# Triggers: add the "reviewally" label to a PR, or comment "/reviewally".
 # Set auto-review: 'true' to also review on open / reopen / push.
 
 name: reviewally
@@ -22,9 +22,9 @@ jobs:
   review:
     if: |
       (github.event_name == 'pull_request' &&
-        (github.event.action != 'labeled' || github.event.label.name == 'ai-review'))
+        (github.event.action != 'labeled' || github.event.label.name == 'reviewally'))
       || (github.event_name == 'issue_comment' &&
-        startsWith(github.event.comment.body, '/ai-review') &&
+        startsWith(github.event.comment.body, '/reviewally') &&
         github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
     permissions:

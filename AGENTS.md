@@ -32,7 +32,7 @@ Branded identity comes from a hosted token minter (`minter/`, see below): consum
 - Run all tests: `npm test`
 - Tests live in `src/**/*.test.ts` and `minter/**/*.test.ts` (both matched by vitest.config.ts)
 - Unit tests cover: path containment, tree building, pi arg/env/models.json generation, JSONL parsing, prompts, mock LLM interaction, app-token fetch/retry, PEM/DER handling with real RSA keys
-- `.github/workflows/ai-code-review.yml` dogfoods the action on its own PRs (posts as `reviewally[bot]`); `.github/workflows/self-test.yml` and `build.yml` run CI
+- `.github/workflows/reviewally.yml` dogfoods the action on its own PRs (posts as `reviewally[bot]`); `.github/workflows/build.yml` runs CI
 - When changing prompt logic, update the corresponding `prompt.test.ts`
 
 ## Code Style
@@ -117,7 +117,7 @@ examples/workflow.yml        # the single consumer-facing sample workflow
 - Extracts to a temp dir and spawns `@earendil-works/pi-coding-agent` headless against it
 - pi runs with read-only tools (`read`, `grep`, `find`, `ls`) — no shell, no write, no network exfiltration
 - The API key is injected via environment variable (never argv); `openai-chat-compatible` endpoints are configured via an ephemeral `models.json` (`agent/engine/provider.ts`)
-- pi is installed on each run into `~/.cache/ai-code-review-pi/<version>` (`npm install`, a few seconds); `pi-version` controls the version, `pi-timeout-ms` is the hard kill timeout (pi has no built-in step cap)
+- pi is installed on each run into `~/.cache/reviewally-pi/<version>` (`npm install`, a few seconds); `pi-version` controls the version, `pi-timeout-ms` is the hard kill timeout (pi has no built-in step cap)
 - pi emits a JSONL event stream (`--mode json`) which `agent/engine/output.ts` parses into a `ReviewResult`
 - Tarball too large → auto-degrades to standard mode
 

@@ -19,7 +19,7 @@ function isPiEvent(value: unknown): value is PiEvent {
 
 /** Directory where pi is installed on the runner. */
 export function installDir(version: string): string {
-  return path.join(os.homedir(), '.cache', 'ai-code-review-pi', version);
+  return path.join(os.homedir(), '.cache', 'reviewally-pi', version);
 }
 
 /** Absolute path to the bundled CLI entry inside the install dir. */

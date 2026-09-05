@@ -31,11 +31,11 @@ inputs:
   trigger-comment:
     description: 'Slash command that triggers a review on a PR comment (case-insensitive).'
     required: false
-    default: '/ai-review'
+    default: '/reviewally'
   trigger-label:
     description: 'PR label that triggers a review when added.'
     required: false
-    default: 'ai-review'
+    default: 'reviewally'
   auto-review:
     description: 'When true, also review automatically on PR open/reopen/push (synchronize) without a label or command.'
     required: false

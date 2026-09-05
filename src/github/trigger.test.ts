@@ -9,8 +9,8 @@ function makeInputs(overrides: Partial<ActionInputs> = {}): ActionInputs {
     apiKey: 'sk-test',
     model: 'gpt-4o',
     githubToken: 'ghp_test',
-    triggerComment: '/ai-review',
-    triggerLabel: 'ai-review',
+    triggerComment: '/reviewally',
+    triggerLabel: 'reviewally',
     autoReview: false,
     maxFiles: 20,
     maxDiffLines: 3000,
@@ -82,10 +82,10 @@ describe('resolveTrigger', () => {
   it('runs on labeled when the trigger label matches', () => {
     setContext(
       'pull_request',
-      { action: 'labeled', label: { name: 'ai-review' }, pull_request: { number: 42 } },
+      { action: 'labeled', label: { name: 'reviewally' }, pull_request: { number: 42 } },
       { owner: 'o', repo: 'r' },
     );
-    const r = resolveTrigger(makeInputs({ triggerLabel: 'ai-review' }));
+    const r = resolveTrigger(makeInputs({ triggerLabel: 'reviewally' }));
     expect(r.run).toBe(true);
     expect(r.review).toEqual({ owner: 'o', repo: 'r', pullNumber: 42 });
   });
@@ -96,7 +96,7 @@ describe('resolveTrigger', () => {
       { action: 'labeled', label: { name: 'something-else' }, pull_request: { number: 1 } },
       { owner: 'o', repo: 'r' },
     );
-    const r = resolveTrigger(makeInputs({ triggerLabel: 'ai-review' }));
+    const r = resolveTrigger(makeInputs({ triggerLabel: 'reviewally' }));
     expect(r.run).toBe(false);
     expect(r.reason).toMatch(/is not the trigger label/);
   });
@@ -115,7 +115,7 @@ describe('resolveTrigger', () => {
   it('skips comments that are not on a PR', () => {
     setContext(
       'issue_comment',
-      { action: 'created', issue: { number: 1 }, comment: { body: '/ai-review', id: 99 } },
+      { action: 'created', issue: { number: 1 }, comment: { body: '/reviewally', id: 99 } },
       { owner: 'o', repo: 'r' },
     );
     const r = resolveTrigger(makeInputs());
@@ -133,7 +133,7 @@ describe('resolveTrigger', () => {
       },
       { owner: 'o', repo: 'r' },
     );
-    const r = resolveTrigger(makeInputs({ triggerComment: '/ai-review' }));
+    const r = resolveTrigger(makeInputs({ triggerComment: '/reviewally' }));
     expect(r.run).toBe(false);
     expect(r.reason).toMatch(/does not start with/);
   });
@@ -144,11 +144,11 @@ describe('resolveTrigger', () => {
       {
         action: 'created',
         issue: { number: 5, pull_request: {} },
-        comment: { body: '/AI-Review please', id: 42 },
+        comment: { body: '/ReviewAlly please', id: 42 },
       },
       { owner: 'o', repo: 'r' },
     );
-    const r = resolveTrigger(makeInputs({ triggerComment: '/ai-review' }));
+    const r = resolveTrigger(makeInputs({ triggerComment: '/reviewally' }));
     expect(r.run).toBe(true);
     expect(r.review).toEqual({ owner: 'o', repo: 'r', pullNumber: 5, commentId: 42 });
   });

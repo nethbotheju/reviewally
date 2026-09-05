@@ -58,8 +58,8 @@ export function getInputs(): ActionInputs {
     }
     appTokenUrl = parsed.toString();
   }
-  const triggerComment = core.getInput('trigger-comment').trim() || '/ai-review';
-  const triggerLabel = core.getInput('trigger-label').trim() || 'ai-review';
+  const triggerComment = core.getInput('trigger-comment').trim() || '/reviewally';
+  const triggerLabel = core.getInput('trigger-label').trim() || 'reviewally';
   const autoReview = core.getBooleanInput('auto-review');
   const maxFiles = parseIntInput('max-files', 20);
   const maxDiffLines = parseIntInput('max-diff-lines', 3000);
@@ -105,7 +105,7 @@ export function getInputs(): ActionInputs {
     reviewMode,
     agentTarballMaxMb,
     contextDocs:
-      contextDocs.length > 0 ? contextDocs : ['AGENTS.md', '.ai-review.md', 'CONTRIBUTING.md'],
+      contextDocs.length > 0 ? contextDocs : ['AGENTS.md', '.reviewally.md', 'CONTRIBUTING.md'],
     piVersion,
     piTimeoutMs,
   };

@@ -1,8 +1,8 @@
 {
-  "name": "ai-code-review",
+  "name": "reviewally",
   "version": "0.1.0",
   "private": true,
-  "description": "Reusable GitHub Action for AI-powered pull request code review (bring-your-own-key).",
+  "description": "ReviewAlly — AI-powered pull request code review GitHub Action (bring-your-own-key).",
   "main": "dist/index.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
