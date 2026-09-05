@@ -36,6 +36,13 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('background');
   });
 
+  it('specifies strict JSON syntax and a fenced template', () => {
+    const prompt = buildSystemPrompt(makeInputs());
+    expect(prompt).toContain('never single quotes');
+    expect(prompt).toContain('```json');
+    expect(prompt).toContain('Use exactly this response template');
+  });
+
   it('includes extra instructions when provided', () => {
     const inputs = makeInputs({ extraInstructions: 'Use functional style.' });
     const prompt = buildSystemPrompt(inputs);
@@ -71,9 +78,16 @@ describe('buildAgentSystemPrompt', () => {
   it('requires verified findings and JSON-only output', () => {
     const prompt = buildAgentSystemPrompt(makeInputs({ reviewMode: 'agent' }));
     expect(prompt).toContain('verify it by reading the relevant file');
-    expect(prompt).toContain('Respond with ONLY the JSON object');
+    expect(prompt).toContain('fenced json code block');
     expect(prompt).toContain('"background"');
     expect(prompt).toContain('"recommendations"');
+  });
+
+  it('specifies strict JSON syntax and a fenced template', () => {
+    const prompt = buildAgentSystemPrompt(makeInputs({ reviewMode: 'agent' }));
+    expect(prompt).toContain('never single quotes');
+    expect(prompt).toContain('```json');
+    expect(prompt).toContain('Use exactly this response template');
   });
 
   it('omits pi-internal docs/themes/skills guidance irrelevant to a review', () => {

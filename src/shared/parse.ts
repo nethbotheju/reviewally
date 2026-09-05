@@ -1,21 +1,42 @@
+import { jsonrepair } from 'jsonrepair';
 import type { FileDescription, Recommendation, ReviewDocument } from '../shared/types';
 
 export function parseReview(raw: string): ReviewDocument {
   const text = extractJson(raw);
   const parsed = parseLenient(text);
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    const kind =
+      typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
     throw new Error(
-      `Model response was not a JSON object: ${typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed}.`,
+      `Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`,
     );
   }
   const obj = parsed as Record<string, unknown>;
 
-  return {
+  const doc = {
     background: asString(obj.background),
     solution: asString(obj.solution),
     files: asFileDescriptions(obj.files),
     recommendations: asRecommendations(obj.recommendations),
   };
+
+  // Repair passes can legitimize input that carries no review content at all;
+  // posting a placeholder-only review would hide the failure.
+  if (
+    !doc.background &&
+    !doc.solution &&
+    doc.files.length === 0 &&
+    doc.recommendations.length === 0
+  ) {
+    throw new Error(
+      `Model response contained no review content. Model response was:\n${preview(raw)}`,
+    );
+  }
+  return doc;
+}
+
+function preview(text: string): string {
+  return text.length > 400 ? `${text.slice(0, 400)}…` : text;
 }
 
 function extractJson(raw: string): string {
@@ -47,9 +68,16 @@ function parseLenient(text: string): unknown {
       lastError = err;
     }
   }
-  const preview = text.length > 400 ? `${text.slice(0, 400)}…` : text;
+  // Last resort: let jsonrepair recover near-JSON (single quotes, unquoted
+  // keys, truncation) that the cheap passes above miss.
+  try {
+    return JSON.parse(jsonrepair(text));
+  } catch (err) {
+    lastError = err;
+  }
+  const p = text.length > 400 ? `${text.slice(0, 400)}…` : text;
   throw new Error(
-    `Could not parse model response as JSON (${(lastError as Error).message}). Model response was:\n${preview}`,
+    `Could not parse model response as JSON (${(lastError as Error).message}). Model response was:\n${p}`,
   );
 }
 

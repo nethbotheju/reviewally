@@ -76,7 +76,9 @@ describe('parseReview', () => {
   });
 
   it('throws on truly malformed JSON', () => {
-    expect(() => parseReview('not json at all')).toThrow(/Could not parse model response/);
+    expect(() => parseReview('not json at all')).toThrow(
+      /Could not parse model response|not a JSON object/,
+    );
   });
 
   it('throws when the parsed result is an array, not an object', () => {
@@ -91,11 +93,48 @@ describe('parseReview', () => {
     expect(() => parseReview('"just a string"')).toThrow(/not a JSON object/);
   });
 
-  it('does not mangle strings containing apostrophes', () => {
-    // Previously the parser tried to "fix" single quotes by mangling all quotes,
-    // which corrupted any string containing an apostrophe. Now it should just throw.
+  it('repairs single-quoted JSON via jsonrepair without mangling apostrophes', () => {
     const broken =
       "{'background':\"this isn't valid JSON\",'solution':'s','files':[],'recommendations':[]}";
-    expect(() => parseReview(broken)).toThrow(/Could not parse model response/);
+    const out = parseReview(broken);
+    expect(out.background).toBe("this isn't valid JSON");
+    expect(out.solution).toBe('s');
+  });
+
+  it('repairs unquoted keys via jsonrepair', () => {
+    const out = parseReview('{background:"b",solution:"s",files:[],recommendations:[]}');
+    expect(out.background).toBe('b');
+    expect(out.solution).toBe('s');
+  });
+
+  it('repairs truncated JSON via jsonrepair', () => {
+    const out = parseReview(
+      '{"background":"b","solution":"s","files":[],"recommendations":[{"category":"Security","note":"unterminat',
+    );
+    expect(out.background).toBe('b');
+    expect(out.recommendations[0]?.category).toBe('Security');
+  });
+
+  it('repairs fenced and truncated JSON end to end', () => {
+    const out = parseReview('```json\n{"background":"b","solution":"s"');
+    expect(out.background).toBe('b');
+    expect(out.solution).toBe('s');
+  });
+
+  it('throws when the response parses but carries no review content', () => {
+    expect(() => parseReview('{}')).toThrow(/no review content/);
+    expect(() =>
+      parseReview('{"background":"","solution":"","files":[],"recommendations":[]}'),
+    ).toThrow(/no review content/);
+  });
+
+  it('includes the model response preview when the result is not an object', () => {
+    try {
+      parseReview('This change looks good overall, nice work.');
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      expect((err as Error).message).toMatch(/not a JSON object: (string|array)/);
+      expect((err as Error).message).toContain('This change looks good overall');
+    }
   });
 });

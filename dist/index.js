@@ -32346,25 +32346,39 @@ function capitalize(value) {
 /***/ }),
 
 /***/ 9742:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.parseReview = parseReview;
+const jsonrepair_1 = __nccwpck_require__(2555);
 function parseReview(raw) {
     const text = extractJson(raw);
     const parsed = parseLenient(text);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error(`Model response was not a JSON object: ${typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed}.`);
+        const kind = typeof parsed === 'object' ? (Array.isArray(parsed) ? 'array' : 'null') : typeof parsed;
+        throw new Error(`Model response was not a JSON object: ${kind}. Model response was:\n${preview(raw)}`);
     }
     const obj = parsed;
-    return {
+    const doc = {
         background: asString(obj.background),
         solution: asString(obj.solution),
         files: asFileDescriptions(obj.files),
         recommendations: asRecommendations(obj.recommendations),
     };
+    // Repair passes can legitimize input that carries no review content at all;
+    // posting a placeholder-only review would hide the failure.
+    if (!doc.background &&
+        !doc.solution &&
+        doc.files.length === 0 &&
+        doc.recommendations.length === 0) {
+        throw new Error(`Model response contained no review content. Model response was:\n${preview(raw)}`);
+    }
+    return doc;
+}
+function preview(text) {
+    return text.length > 400 ? `${text.slice(0, 400)}…` : text;
 }
 function extractJson(raw) {
     let text = raw.trim();
@@ -32393,8 +32407,16 @@ function parseLenient(text) {
             lastError = err;
         }
     }
-    const preview = text.length > 400 ? `${text.slice(0, 400)}…` : text;
-    throw new Error(`Could not parse model response as JSON (${lastError.message}). Model response was:\n${preview}`);
+    // Last resort: let jsonrepair recover near-JSON (single quotes, unquoted
+    // keys, truncation) that the cheap passes above miss.
+    try {
+        return JSON.parse((0, jsonrepair_1.jsonrepair)(text));
+    }
+    catch (err) {
+        lastError = err;
+    }
+    const p = text.length > 400 ? `${text.slice(0, 400)}…` : text;
+    throw new Error(`Could not parse model response as JSON (${lastError.message}). Model response was:\n${p}`);
 }
 function asString(value) {
     return typeof value === 'string' ? value.trim() : '';
@@ -32494,8 +32516,11 @@ function buildSystemPrompt(inputs) {
     const base = `You are a senior software engineer reviewing a GitHub pull request.
 Produce a clear, professional, high-level review.
 
-Your ENTIRE response must be a single valid JSON object and nothing else — no markdown, no code fences, no commentary before or after. Respond with ONLY this JSON object, using exactly this schema:
+Your ENTIRE response must be a single JSON object with exactly this schema, wrapped in one fenced json code block — no markdown, code, or text before or after the block:
 
+Use exactly this response template:
+
+\`\`\`json
 {
   "background": "1-3 sentences: what this change addresses and why it is needed (your understanding of the PR's intent).",
   "solution": "1-3 sentences: assessment of the implementation approach taken.",
@@ -32506,13 +32531,19 @@ Your ENTIRE response must be a single valid JSON object and nothing else — no 
     { "category": "Security | Edge Case | Performance | Refactoring Tip", "note": "a substantive, high-level suggestion" }
   ]
 }
+\`\`\`
+
+JSON syntax rules (strict):
+- Use double quotes (") for every key and string value — never single quotes (').
+- No trailing commas and no comments.
+- Escape double quotes inside strings as \\" and use \\n for line breaks; never put a raw line break inside a string.
 
 Rules:
 - Be concise and high-level. Do not restate the diff.
 - "recommendations" must contain ONLY substantive, actionable, high-level items: real security risks, meaningful edge cases, performance issues, critical-path test coverage gaps, or genuine refactoring opportunities.
 - EXCLUDE trivial noise: never mention missing or extra comments, code-style preferences, or obvious restatements. If there is nothing substantive, return an empty "recommendations" array.
 - "files" should cover the key changed files with concise descriptions and exact paths.
-- Output the JSON object and nothing else.`;
+- Your entire response must be valid JSON inside a single fenced json code block — nothing else.`;
     if (!inputs.extraInstructions)
         return base;
     return `${base}\n\nAdditional review instructions from the project:\n${inputs.extraInstructions}`;
@@ -32540,8 +32571,11 @@ Guidelines:
 - Show file paths clearly when referencing files.`;
     const output = `Output format:
 
-Your FINAL response — and nothing else — must be a single valid JSON object with exactly this schema. No markdown, no code fences, no text before or after:
+Your FINAL response must be a single JSON object with exactly this schema, wrapped in one fenced json code block — no markdown, code, or text before or after the block:
 
+Use exactly this response template:
+
+\`\`\`json
 {
   "background": "1-3 sentences: what this change addresses and why (your understanding of the PR's intent).",
   "solution": "1-3 sentences: assessment of the implementation approach taken.",
@@ -32552,12 +32586,18 @@ Your FINAL response — and nothing else — must be a single valid JSON object 
     { "category": "Security | Edge Case | Performance | Refactoring Tip", "note": "a substantive, actionable, verified suggestion" }
   ]
 }
+\`\`\`
+
+JSON syntax rules (strict):
+- Use double quotes (") for every key and string value — never single quotes (').
+- No trailing commas and no comments.
+- Escape double quotes inside strings as \\" and use \\n for line breaks; never put a raw line break inside a string.
 
 Rules:
 - "recommendations": ONLY substantive, verified items — real security risks, meaningful edge cases, performance issues, or genuine refactors. Use an empty array if there is nothing substantive.
 - Never mention code-style, missing/extra comments, or trivial restatements of the diff.
 - "files": the key changed files, using exact paths from the diff.
-- Respond with ONLY the JSON object.`;
+- Your final response must be valid JSON inside a single fenced json code block — nothing else.`;
     const sections = [persona];
     if (inputs.extraInstructions) {
         sections.push(`Additional review instructions from the project:\n${inputs.extraInstructions}`);
@@ -32568,7 +32608,7 @@ Rules:
 function buildUserPrompt(pr, files, ctx, isAgent = false) {
     const parts = [];
     if (isAgent) {
-        parts.push('Review the pull request below. Investigate the repository with your tools as needed, verify any concern in the code, then respond with ONLY the JSON review object described in your instructions.');
+        parts.push('Review the pull request below. Investigate the repository with your tools as needed, verify any concern in the code, then respond with ONLY the JSON review object described in your instructions, wrapped in its json code fence.');
         parts.push('');
     }
     parts.push(`# Pull Request #${pr.number}: ${pr.title}`);
@@ -34619,6 +34659,1136 @@ function parseParams (str) {
 
 module.exports = parseParams
 
+
+/***/ }),
+
+/***/ 2555:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+Object.defineProperty(exports, "JSONRepairError", ({
+  enumerable: true,
+  get: function () {
+    return _JSONRepairError.JSONRepairError;
+  }
+}));
+Object.defineProperty(exports, "jsonrepair", ({
+  enumerable: true,
+  get: function () {
+    return _jsonrepair.jsonrepair;
+  }
+}));
+var _jsonrepair = __nccwpck_require__(8545);
+var _JSONRepairError = __nccwpck_require__(8578);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 8545:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports.jsonrepair = jsonrepair;
+var _JSONRepairError = __nccwpck_require__(8578);
+var _stringUtils = __nccwpck_require__(5119);
+const controlCharacters = {
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t'
+};
+
+// map with all escape characters
+const escapeCharacters = {
+  '"': '"',
+  '\\': '\\',
+  '/': '/',
+  b: '\b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t'
+  // note that \u is handled separately in parseString()
+};
+
+/**
+ * Repair a string containing an invalid JSON document.
+ * For example changes JavaScript notation into JSON notation.
+ *
+ * Example:
+ *
+ *     try {
+ *       const json = "{name: 'John'}"
+ *       const repaired = jsonrepair(json)
+ *       console.log(repaired)
+ *       // '{"name": "John"}'
+ *     } catch (err) {
+ *       console.error(err)
+ *     }
+ *
+ */
+function jsonrepair(text) {
+  let i = 0; // current index in text
+  let output = ''; // generated output
+
+  parseMarkdownCodeBlock(['```', '[```', '{```']);
+  const processed = parseValue();
+  if (!processed) {
+    throwUnexpectedEnd();
+  }
+  parseMarkdownCodeBlock(['```', '```]', '```}']);
+  const processedComma = parseCharacter(',');
+  if (processedComma) {
+    parseWhitespaceAndSkipComments();
+  }
+  if ((0, _stringUtils.isStartOfValue)(text[i]) && (0, _stringUtils.endsWithCommaOrNewline)(output)) {
+    // start of a new value after end of the root level object: looks like
+    // newline delimited JSON -> turn into a root level array
+    if (!processedComma) {
+      // repair missing comma
+      output = (0, _stringUtils.insertBeforeLastWhitespace)(output, ',');
+    }
+    parseNewlineDelimitedJSON();
+  } else if (processedComma) {
+    // repair: remove trailing comma
+    output = (0, _stringUtils.stripLastOccurrence)(output, ',');
+  }
+
+  // repair redundant end quotes
+  while (text[i] === '}' || text[i] === ']') {
+    i++;
+    parseWhitespaceAndSkipComments();
+  }
+  if (i >= text.length) {
+    // reached the end of the document properly
+    return output;
+  }
+  throwUnexpectedCharacter();
+  function parseValue() {
+    parseWhitespaceAndSkipComments();
+    const processed = parseObject() || parseArray() || parseString() || parseNumber() || parseKeywords() || parseUnquotedString(false) || parseRegex();
+    parseWhitespaceAndSkipComments();
+    return processed;
+  }
+  function parseWhitespaceAndSkipComments() {
+    let skipNewline = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
+    const start = i;
+    let changed = parseWhitespace(skipNewline);
+    do {
+      changed = parseComment();
+      if (changed) {
+        changed = parseWhitespace(skipNewline);
+      }
+    } while (changed);
+    return i > start;
+  }
+  function parseWhitespace(skipNewline) {
+    const _isWhiteSpace = skipNewline ? _stringUtils.isWhitespace : _stringUtils.isWhitespaceExceptNewline;
+    let whitespace = '';
+    while (true) {
+      if (_isWhiteSpace(text, i)) {
+        whitespace += text[i];
+        i++;
+      } else if ((0, _stringUtils.isSpecialWhitespace)(text, i)) {
+        // repair special whitespace
+        whitespace += ' ';
+        i++;
+      } else {
+        break;
+      }
+    }
+    if (whitespace.length > 0) {
+      output += whitespace;
+      return true;
+    }
+    return false;
+  }
+  function parseComment() {
+    // find a block comment '/* ... */'
+    if (text[i] === '/' && text[i + 1] === '*') {
+      // repair block comment by skipping it
+      while (i < text.length && !atEndOfBlockComment(text, i)) {
+        i++;
+      }
+      i += 2;
+      return true;
+    }
+
+    // find a line comment '// ...'
+    if (text[i] === '/' && text[i + 1] === '/') {
+      // repair line comment by skipping it
+      while (i < text.length && text[i] !== '\n') {
+        i++;
+      }
+      return true;
+    }
+    return false;
+  }
+  function parseMarkdownCodeBlock(blocks) {
+    // find and skip over a Markdown fenced code block:
+    //     ``` ... ```
+    // or
+    //     ```json ... ```
+    if (skipMarkdownCodeBlock(blocks)) {
+      if ((0, _stringUtils.isFunctionNameCharStart)(text[i])) {
+        // strip the optional language specifier like "json"
+        while (i < text.length && (0, _stringUtils.isFunctionNameChar)(text[i])) {
+          i++;
+        }
+      }
+      parseWhitespaceAndSkipComments();
+      return true;
+    }
+    return false;
+  }
+  function skipMarkdownCodeBlock(blocks) {
+    parseWhitespace(true);
+    for (const block of blocks) {
+      const end = i + block.length;
+      if (text.slice(i, end) === block) {
+        i = end;
+        return true;
+      }
+    }
+    return false;
+  }
+  function parseCharacter(char) {
+    if (text[i] === char) {
+      output += text[i];
+      i++;
+      return true;
+    }
+    return false;
+  }
+  function skipCharacter(char) {
+    if (text[i] === char) {
+      i++;
+      return true;
+    }
+    return false;
+  }
+  function skipEscapeCharacter() {
+    return skipCharacter('\\');
+  }
+
+  /**
+   * Skip ellipsis like "[1,2,3,...]" or "[1,2,3,...,9]" or "[...,7,8,9]"
+   * or a similar construct in objects.
+   */
+  function skipEllipsis() {
+    parseWhitespaceAndSkipComments();
+    if (text[i] === '.' && text[i + 1] === '.' && text[i + 2] === '.') {
+      // repair: remove the ellipsis (three dots) and optionally a comma
+      i += 3;
+      parseWhitespaceAndSkipComments();
+      skipCharacter(',');
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Parse an object like '{"key": "value"}'
+   */
+  function parseObject() {
+    if (text[i] === '{') {
+      output += '{';
+      i++;
+      parseWhitespaceAndSkipComments();
+
+      // repair: skip leading comma like in {, message: "hi"}
+      if (skipCharacter(',')) {
+        parseWhitespaceAndSkipComments();
+      }
+      let initial = true;
+      while (i < text.length && text[i] !== '}') {
+        let processedComma;
+        if (!initial) {
+          processedComma = parseCharacter(',');
+          if (!processedComma) {
+            // repair missing comma
+            output = (0, _stringUtils.insertBeforeLastWhitespace)(output, ',');
+          }
+          parseWhitespaceAndSkipComments();
+        } else {
+          processedComma = true;
+        }
+        skipEllipsis();
+        const processedKey = parseString() || parseUnquotedString(true);
+        if (!processedKey) {
+          if (text[i] === '}' || text[i] === '{' || text[i] === ']' || text[i] === '[' || text[i] === undefined) {
+            // repair trailing comma
+            if (!initial) {
+              output = (0, _stringUtils.stripLastOccurrence)(output, ',');
+            }
+          } else {
+            throwObjectKeyExpected();
+          }
+          break;
+        }
+        parseWhitespaceAndSkipComments();
+        const processedColon = parseCharacter(':');
+        const truncatedText = i >= text.length;
+        if (!processedColon) {
+          if ((0, _stringUtils.isStartOfValue)(text[i]) || truncatedText) {
+            // repair missing colon
+            output = (0, _stringUtils.insertBeforeLastWhitespace)(output, ':');
+          } else {
+            throwColonExpected();
+          }
+        }
+        const processedValue = parseValue();
+        if (!processedValue) {
+          if (processedColon || truncatedText) {
+            // repair missing object value
+            output += 'null';
+          } else {
+            throwColonExpected();
+          }
+        }
+        initial = false;
+      }
+      if (text[i] === '}') {
+        output += '}';
+        i++;
+      } else {
+        // repair missing end bracket
+        output = (0, _stringUtils.insertBeforeLastWhitespace)(output, '}');
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Parse an array like '["item1", "item2", ...]'
+   */
+  function parseArray() {
+    if (text[i] === '[') {
+      output += '[';
+      i++;
+      parseWhitespaceAndSkipComments();
+
+      // repair: skip leading comma like in [,1,2,3]
+      if (skipCharacter(',')) {
+        parseWhitespaceAndSkipComments();
+      }
+      let initial = true;
+      while (i < text.length && text[i] !== ']') {
+        if (!initial) {
+          const processedComma = parseCharacter(',');
+          if (!processedComma) {
+            // repair missing comma
+            output = (0, _stringUtils.insertBeforeLastWhitespace)(output, ',');
+          }
+        }
+        skipEllipsis();
+        const processedValue = parseValue();
+        if (!processedValue) {
+          // repair trailing comma
+          if (!initial) {
+            output = (0, _stringUtils.stripLastOccurrence)(output, ',');
+          }
+          break;
+        }
+        initial = false;
+      }
+      if (text[i] === ']') {
+        output += ']';
+        i++;
+      } else {
+        // repair missing closing array bracket
+        output = (0, _stringUtils.insertBeforeLastWhitespace)(output, ']');
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Parse and repair Newline Delimited JSON (NDJSON):
+   * multiple JSON objects separated by a newline character
+   */
+  function parseNewlineDelimitedJSON() {
+    // repair NDJSON
+    let initial = true;
+    let processedValue = true;
+    while (processedValue) {
+      if (!initial) {
+        // parse optional comma, insert when missing
+        const processedComma = parseCharacter(',');
+        if (!processedComma) {
+          // repair: add missing comma
+          output = (0, _stringUtils.insertBeforeLastWhitespace)(output, ',');
+        }
+      } else {
+        initial = false;
+      }
+      processedValue = parseValue();
+    }
+    if (!processedValue) {
+      // repair: remove trailing comma
+      output = (0, _stringUtils.stripLastOccurrence)(output, ',');
+    }
+
+    // repair: wrap the output inside array brackets
+    output = `[\n${output}\n]`;
+  }
+
+  /**
+   * Parse a string enclosed by double quotes "...". Can contain escaped quotes
+   * Repair strings enclosed in single quotes or special quotes
+   * Repair an escaped string
+   *
+   * The function can run in two stages:
+   * - First, it assumes the string has a valid end quote
+   * - If it turns out that the string does not have a valid end quote followed
+   *   by a delimiter (which should be the case), the function runs again in a
+   *   more conservative way, stopping the string at the first next delimiter
+   *   and fixing the string by inserting a quote there, or stopping at a
+   *   stop index detected in the first iteration.
+   */
+  function parseString() {
+    let stopAtDelimiter = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : false;
+    let stopAtIndex = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : -1;
+    const skipEscapeChars = text[i] === '\\';
+    if (skipEscapeChars) {
+      // repair: remove the first escape character
+      i++;
+      if (!(0, _stringUtils.isQuote)(text[i])) {
+        throwUnexpectedCharacter();
+      }
+    }
+
+    // a string can be opened by a quote character, or by an HTML entity that
+    // decodes to a quote (like &quot;) when repairing HTML-encoded JSON
+    const openEntity = text[i] === '&' ? (0, _stringUtils.matchHtmlEntity)(text.slice(i, i + _stringUtils.maxHtmlEntityLength)) : null;
+    const openedByEntity = (0, _stringUtils.isDoubleQuoteEntity)(openEntity) || (0, _stringUtils.isSingleQuoteEntity)(openEntity);
+    if ((0, _stringUtils.isQuote)(text[i]) || openedByEntity) {
+      // double quotes are correct JSON,
+      // single quotes come from JavaScript for example, we assume it will have a correct single end quote too
+      // otherwise, we will match any double-quote-like start with a double-quote-like end,
+      // or any single-quote-like start with a single-quote-like end
+      const isEndQuote = (0, _stringUtils.isDoubleQuote)(text[i]) ? _stringUtils.isDoubleQuote : (0, _stringUtils.isSingleQuote)(text[i]) ? _stringUtils.isSingleQuote : (0, _stringUtils.isSingleQuoteLike)(text[i]) ? _stringUtils.isSingleQuoteLike : _stringUtils.isDoubleQuoteLike;
+      const iBefore = i;
+      const oBefore = output.length;
+      let str = '"';
+      // when opened by an entity, skip past the whole entity; otherwise skip the quote
+      i += openedByEntity && openEntity ? openEntity.length : 1;
+      while (true) {
+        if (i >= text.length) {
+          // end of text, we are missing an end quote
+
+          const iPrev = prevNonWhitespaceIndex(i - 1);
+          if (!stopAtDelimiter && (0, _stringUtils.isDelimiter)(text.charAt(iPrev))) {
+            // if the text ends with a delimiter, like ["hello],
+            // so the missing end quote should be inserted before this delimiter
+            // retry parsing the string, stopping at the first next delimiter
+            i = iBefore;
+            output = output.substring(0, oBefore);
+            return parseString(true);
+          }
+
+          // repair missing quote
+          str = (0, _stringUtils.insertBeforeLastWhitespace)(str, '"');
+          output += str;
+          return true;
+        }
+        if (i === stopAtIndex) {
+          // use the stop index detected in the first iteration, and repair end quote
+          str = (0, _stringUtils.insertBeforeLastWhitespace)(str, '"');
+          output += str;
+          return true;
+        }
+
+        // inside an entity-opened string a '&' is an entity; it is the end quote
+        // when it decodes to the opening quote
+        const entity = openedByEntity && text[i] === '&' ? (0, _stringUtils.matchHtmlEntity)(text.slice(i, i + _stringUtils.maxHtmlEntityLength)) : null;
+        const isEnd = entity && openEntity ? entity.char === openEntity.char : isEndQuote(text[i]);
+        if (isEnd) {
+          // end quote
+          // let us check what is before and after the quote to verify whether this is a legit end quote
+          const iQuote = i;
+          const oQuote = str.length;
+          str += '"';
+          i += entity ? entity.length : 1;
+          output += str;
+          parseWhitespaceAndSkipComments(false);
+          if (stopAtDelimiter || i >= text.length || (0, _stringUtils.isDelimiter)(text[i]) &&
+          // only count the brackets inside the string when actually needed,
+          // i.e. when the quote is directly followed by a closing bracket
+          !(0, _stringUtils.isInsideUnclosedBracket)(str, text[i]) || (0, _stringUtils.isQuote)(text[i]) && !nextQuoteIsEndQuote(i) || (0, _stringUtils.isDigit)(text[i])) {
+            // The quote is followed by the end of the text, a delimiter,
+            // or a next value. So the quote is indeed the end of the string.
+            parseConcatenatedString();
+            return true;
+          }
+          if (text[i] === '\\') {
+            throwUnexpectedCharacter();
+          }
+          const iPrevChar = prevNonWhitespaceIndex(iQuote - 1);
+          const prevChar = text.charAt(iPrevChar);
+          if (prevChar === ',') {
+            // A comma followed by a quote, like '{"a":"b,c,"d":"e"}'.
+            // We assume that the quote is a start quote, and that the end quote
+            // should have been located right before the comma but is missing.
+            i = iBefore;
+            output = output.substring(0, oBefore);
+            return parseString(false, iPrevChar);
+          }
+          if ((0, _stringUtils.isDelimiter)(prevChar)) {
+            // This is not the right end quote: it is preceded by a delimiter,
+            // and NOT followed by a delimiter. So, there is an end quote missing
+            // parse the string again and then stop at the first next delimiter
+            i = iBefore;
+            output = output.substring(0, oBefore);
+            return parseString(true);
+          }
+
+          // revert to right after the quote but before any whitespace, and continue parsing the string
+          output = output.substring(0, oBefore);
+          i = iQuote + (entity ? entity.length : 1);
+
+          // repair unescaped quote
+          str = `${str.substring(0, oQuote)}\\${str.substring(oQuote)}`;
+        } else if (stopAtDelimiter && (0, _stringUtils.isUnquotedStringDelimiter)(text[i])) {
+          // we're in the mode to stop the string at the first delimiter
+          // because there is an end quote missing
+
+          // test start of an url like "https://..." (this would be parsed as a comment)
+          if (text[i - 1] === ':' && _stringUtils.regexUrlStart.test(text.substring(iBefore + 1, i + 2))) {
+            while (i < text.length && _stringUtils.regexUrlChar.test(text[i])) {
+              str += text[i];
+              i++;
+            }
+          }
+
+          // repair missing quote
+          str = (0, _stringUtils.insertBeforeLastWhitespace)(str, '"');
+          output += str;
+          parseConcatenatedString();
+          return true;
+        } else if (entity) {
+          // decode an HTML entity inside the string as content
+          const char = entity.char;
+          if (char === '"') {
+            // repair unescaped double quote
+            str += '\\"';
+          } else if ((0, _stringUtils.isControlCharacter)(char)) {
+            str += controlCharacters[char];
+          } else {
+            str += char;
+          }
+          i += entity.length;
+        } else if (text[i] === '\\') {
+          // handle escaped content like \n or \u2605
+          const char = text.charAt(i + 1);
+          const escapeChar = escapeCharacters[char];
+          if (escapeChar !== undefined) {
+            str += text.slice(i, i + 2);
+            i += 2;
+          } else if (char === 'u') {
+            let j = 2;
+            while (j < 6 && (0, _stringUtils.isHex)(text[i + j])) {
+              j++;
+            }
+            if (j === 6) {
+              str += text.slice(i, i + 6);
+              i += 6;
+            } else if (i + j >= text.length) {
+              // repair invalid or truncated unicode char at the end of the text
+              // by removing the unicode char and ending the string here
+              i = text.length;
+            } else {
+              throwInvalidUnicodeCharacter();
+            }
+          } else if (char === '\n') {
+            // repair a backslash escaped newline (like in Bash scripts)
+            str += '\\n';
+            i += 2;
+          } else {
+            // repair invalid escape character: remove it
+            str += char;
+            i += 2;
+          }
+        } else {
+          // handle regular characters
+          const char = text.charAt(i);
+          if (char === '"' && text[i - 1] !== '\\') {
+            // repair unescaped double quote
+            str += `\\${char}`;
+            i++;
+          } else if ((0, _stringUtils.isControlCharacter)(char)) {
+            // unescaped control character
+            str += controlCharacters[char];
+            i++;
+          } else {
+            if (!(0, _stringUtils.isValidStringCharacter)(char)) {
+              throwInvalidCharacter(char);
+            }
+            str += char;
+            i++;
+          }
+        }
+        if (skipEscapeChars) {
+          // repair: skipped escape character (nothing to do)
+          skipEscapeCharacter();
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Repair concatenated strings like "hello" + "world", change this into "helloworld"
+   */
+  function parseConcatenatedString() {
+    let processed = false;
+    parseWhitespaceAndSkipComments();
+    while (text[i] === '+') {
+      processed = true;
+      i++;
+      parseWhitespaceAndSkipComments();
+
+      // repair: remove the end quote of the first string
+      output = (0, _stringUtils.stripLastOccurrence)(output, '"', true);
+      const start = output.length;
+      const parsedStr = parseString();
+      if (parsedStr) {
+        // repair: remove the start quote of the second string
+        output = (0, _stringUtils.removeAtIndex)(output, start, 1);
+      } else {
+        // repair: remove the + because it is not followed by a string
+        output = (0, _stringUtils.insertBeforeLastWhitespace)(output, '"');
+      }
+    }
+    return processed;
+  }
+
+  /**
+   * Parse a number like 2.4 or 2.4e6
+   */
+  function parseNumber() {
+    const start = i;
+    let num = '';
+    let invalid = false;
+    if (text[i] === '-') {
+      num += text[i];
+      i++;
+      if (!(0, _stringUtils.isDigit)(text[i]) && atEndOfNumber()) {
+        // repair missing zero after minus like in "-.2" or "-"
+        num += '0';
+      }
+    }
+    if (text[i] === '0' && (0, _stringUtils.isDigit)(text[i + 1])) {
+      // the number has leading zeros like "00123" or "001.23"
+      invalid = true;
+    }
+    while ((0, _stringUtils.isDigit)(text[i])) {
+      num += text[i];
+      i++;
+    }
+    if (text[i] === '.') {
+      if (num === '' || num === '-') {
+        // repair missing leading zero before dot
+        num += '0';
+      }
+      num += text[i];
+      i++;
+      if (!(0, _stringUtils.isDigit)(text[i])) {
+        // repair a truncated number like "2." into "2.0"
+        num += '0';
+      }
+      while ((0, _stringUtils.isDigit)(text[i])) {
+        num += text[i];
+        i++;
+      }
+    }
+    if (i > start) {
+      if (text[i] === 'e' || text[i] === 'E') {
+        if (num === '-') {
+          invalid = true;
+        }
+        num += text[i];
+        i++;
+        if (text[i] === '-' || text[i] === '+') {
+          num += text[i];
+          i++;
+        }
+        if (!(0, _stringUtils.isDigit)(text[i])) {
+          // repair a truncated number like "2e" into "2e0"
+          num += '0';
+        }
+        while ((0, _stringUtils.isDigit)(text[i])) {
+          num += text[i];
+          i++;
+        }
+      }
+
+      // if we're not at the end of the number by this point, allow this to be parsed as another type
+      if (!atEndOfNumber()) {
+        i = start;
+        return false;
+      }
+      output += invalid ? `"${text.substring(start, i)}"` : num;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Parse keywords true, false, null
+   * Repair Python keywords True, False, None
+   */
+  function parseKeywords() {
+    return parseKeyword('true', 'true') || parseKeyword('false', 'false') || parseKeyword('null', 'null') ||
+    // repair Python keywords True, False, None
+    parseKeyword('True', 'true') || parseKeyword('False', 'false') || parseKeyword('None', 'null');
+  }
+  function parseKeyword(name, value) {
+    if (text.slice(i, i + name.length) === name && !(0, _stringUtils.isFunctionNameChar)(text[i + name.length])) {
+      output += value;
+      i += name.length;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Repair an unquoted string by adding quotes around it
+   * Repair a MongoDB function call like NumberLong("2")
+   * Repair a JSONP function call like callback({...});
+   */
+  function parseUnquotedString(isKey) {
+    // note that the symbol can end with whitespaces: we stop at the next delimiter
+    // also, note that we allow strings to contain a slash / in order to support repairing regular expressions
+    const start = i;
+    if ((0, _stringUtils.isFunctionNameCharStart)(text[i])) {
+      while (i < text.length && (0, _stringUtils.isFunctionNameChar)(text[i])) {
+        i++;
+      }
+      let j = i;
+      while ((0, _stringUtils.isWhitespace)(text, j)) {
+        j++;
+      }
+      if (text[j] === '(') {
+        // repair a MongoDB function call like NumberLong("2")
+        // repair a JSONP function call like callback({...});
+        i = j + 1;
+        parseValue();
+        if (text[i] === ')') {
+          // repair: skip close bracket of function call
+          i++;
+          if (text[i] === ';') {
+            // repair: skip semicolon after JSONP call
+            i++;
+          }
+        }
+        return true;
+      }
+    }
+    while (i < text.length && !(0, _stringUtils.isUnquotedStringDelimiter)(text[i]) && !(0, _stringUtils.isQuote)(text[i]) && (!isKey || text[i] !== ':')) {
+      i++;
+    }
+
+    // test start of an url like "https://..." (this would be parsed as a comment)
+    if (text[i - 1] === ':' && _stringUtils.regexUrlStart.test(text.substring(start, i + 2))) {
+      while (i < text.length && _stringUtils.regexUrlChar.test(text[i])) {
+        i++;
+      }
+    }
+    if (i > start) {
+      // repair unquoted string
+      // also, repair undefined into null
+
+      // first, go back to prevent getting trailing whitespaces in the string
+      while ((0, _stringUtils.isWhitespace)(text, i - 1) && i > 0) {
+        i--;
+      }
+      const symbol = text.slice(start, i);
+      output += symbol === 'undefined' ? 'null' : JSON.stringify(symbol);
+      if (text[i] === '"') {
+        // we had a missing start quote, but now we encountered the end quote, so we can skip that one
+        i++;
+      }
+      return true;
+    }
+  }
+  function parseRegex() {
+    if (text[i] === '/') {
+      const start = i;
+      i++;
+      while (i < text.length && (text[i] !== '/' || text[i - 1] === '\\')) {
+        i++;
+      }
+      i++;
+      output += JSON.stringify(text.substring(start, i));
+      return true;
+    }
+  }
+  function prevNonWhitespaceIndex(start) {
+    let prev = start;
+    while (prev > 0 && (0, _stringUtils.isWhitespace)(text, prev)) {
+      prev--;
+    }
+    return prev;
+  }
+  function nextQuoteIsEndQuote(index) {
+    // precondition: text[index] is a quote. Peek past it: if nothing meaningful
+    // follows, that quote is the true end and this one is embedded (e.g. `"The TV is 72""`)
+    let next = index + 1;
+    while (next < text.length && (0, _stringUtils.isWhitespace)(text, next)) {
+      next++;
+    }
+    return next >= text.length || (0, _stringUtils.isDelimiter)(text[next]);
+  }
+  function atEndOfNumber() {
+    return i >= text.length || (0, _stringUtils.isDelimiter)(text[i]) || (0, _stringUtils.isWhitespace)(text, i);
+  }
+  function throwInvalidCharacter(char) {
+    throw new _JSONRepairError.JSONRepairError(`Invalid character ${JSON.stringify(char)}`, i);
+  }
+  function throwUnexpectedCharacter() {
+    throw new _JSONRepairError.JSONRepairError(`Unexpected character ${JSON.stringify(text[i])}`, i);
+  }
+  function throwUnexpectedEnd() {
+    throw new _JSONRepairError.JSONRepairError('Unexpected end of json string', text.length);
+  }
+  function throwObjectKeyExpected() {
+    throw new _JSONRepairError.JSONRepairError('Object key expected', i);
+  }
+  function throwColonExpected() {
+    throw new _JSONRepairError.JSONRepairError('Colon expected', i);
+  }
+  function throwInvalidUnicodeCharacter() {
+    const chars = text.slice(i, i + 6);
+    throw new _JSONRepairError.JSONRepairError(`Invalid unicode character "${chars}"`, i);
+  }
+}
+function atEndOfBlockComment(text, i) {
+  return text[i] === '*' && text[i + 1] === '/';
+}
+//# sourceMappingURL=jsonrepair.js.map
+
+/***/ }),
+
+/***/ 8578:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports.JSONRepairError = void 0;
+class JSONRepairError extends Error {
+  constructor(message, position) {
+    super(`${message} at position ${position}`);
+    this.position = position;
+  }
+}
+exports.JSONRepairError = JSONRepairError;
+//# sourceMappingURL=JSONRepairError.js.map
+
+/***/ }),
+
+/***/ 5119:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports.countOccurrences = countOccurrences;
+exports.endsWithCommaOrNewline = endsWithCommaOrNewline;
+exports.insertBeforeLastWhitespace = insertBeforeLastWhitespace;
+exports.isControlCharacter = isControlCharacter;
+exports.isDelimiter = isDelimiter;
+exports.isDigit = isDigit;
+exports.isDoubleQuote = isDoubleQuote;
+exports.isDoubleQuoteEntity = isDoubleQuoteEntity;
+exports.isDoubleQuoteLike = isDoubleQuoteLike;
+exports.isFunctionNameChar = isFunctionNameChar;
+exports.isFunctionNameCharStart = isFunctionNameCharStart;
+exports.isHex = isHex;
+exports.isInsideUnclosedBracket = isInsideUnclosedBracket;
+exports.isQuote = isQuote;
+exports.isSingleQuote = isSingleQuote;
+exports.isSingleQuoteEntity = isSingleQuoteEntity;
+exports.isSingleQuoteLike = isSingleQuoteLike;
+exports.isSpecialWhitespace = isSpecialWhitespace;
+exports.isStartOfValue = isStartOfValue;
+exports.isUnquotedStringDelimiter = isUnquotedStringDelimiter;
+exports.isValidStringCharacter = isValidStringCharacter;
+exports.isWhitespace = isWhitespace;
+exports.isWhitespaceExceptNewline = isWhitespaceExceptNewline;
+exports.matchHtmlEntity = matchHtmlEntity;
+exports.regexUrlStart = exports.regexUrlChar = exports.maxHtmlEntityLength = void 0;
+exports.removeAtIndex = removeAtIndex;
+exports.stripLastOccurrence = stripLastOccurrence;
+const codeSpace = 0x20; // " "
+const codeNewline = 0xa; // "\n"
+const codeTab = 0x9; // "\t"
+const codeReturn = 0xd; // "\r"
+
+// unicode spaces: https://jkorpela.fi/chars/spaces.html
+const codeNonBreakingSpace = 0x00a0;
+const codeMongolianVowelSeparator = 0x180e;
+const codeEnQuad = 0x2000;
+const codeZeroWidthSpace = 0x200b;
+const codeNarrowNoBreakSpace = 0x202f;
+const codeMediumMathematicalSpace = 0x205f;
+const codeIdeographicSpace = 0x3000;
+const codeZeroWidthNoBreakSpace = 0xfeff;
+function isHex(char) {
+  return /^[0-9A-Fa-f]$/.test(char);
+}
+function isDigit(char) {
+  return char >= '0' && char <= '9';
+}
+function isValidStringCharacter(char) {
+  // note that the valid range is between \u{0020} and \u{10ffff},
+  // but in JavaScript it is not possible to create a code point larger than
+  // \u{10ffff}, so there is no need to test for that here.
+  return char >= '\u0020';
+}
+function isDelimiter(char) {
+  return ',:[]/{}()\n+'.includes(char);
+}
+function isFunctionNameCharStart(char) {
+  return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char === '_' || char === '$';
+}
+function isFunctionNameChar(char) {
+  return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char === '_' || char === '$' || char >= '0' && char <= '9';
+}
+
+// matches "https://" and other schemas
+const regexUrlStart = exports.regexUrlStart = /^(http|https|ftp|mailto|file|data|irc):\/\/$/;
+
+// matches all valid URL characters EXCEPT "[", "]", and ",", since that are important JSON delimiters
+const regexUrlChar = exports.regexUrlChar = /^[A-Za-z0-9-._~:/?#@!$&'()*+;=]$/;
+function isUnquotedStringDelimiter(char) {
+  return ',[]/{}\n+'.includes(char);
+}
+function isStartOfValue(char) {
+  return isQuote(char) || regexStartOfValue.test(char);
+}
+
+// alpha, number, minus, or opening bracket or brace
+const regexStartOfValue = /^[[{\w-]$/;
+function isControlCharacter(char) {
+  return char === '\n' || char === '\r' || char === '\t' || char === '\b' || char === '\f';
+}
+/**
+ * Check if the given character is a whitespace character like space, tab, or
+ * newline
+ */
+function isWhitespace(text, index) {
+  const code = text.charCodeAt(index);
+  return code === codeSpace || code === codeNewline || code === codeTab || code === codeReturn;
+}
+
+/**
+ * Check if the given character is a whitespace character like space or tab,
+ * but NOT a newline
+ */
+function isWhitespaceExceptNewline(text, index) {
+  const code = text.charCodeAt(index);
+  return code === codeSpace || code === codeTab || code === codeReturn;
+}
+
+/**
+ * Check if the given character is a special whitespace character, some
+ * unicode variant
+ */
+function isSpecialWhitespace(text, index) {
+  const code = text.charCodeAt(index);
+  return code === codeNonBreakingSpace || code === codeMongolianVowelSeparator || code >= codeEnQuad && code <= codeZeroWidthSpace || code === codeNarrowNoBreakSpace || code === codeMediumMathematicalSpace || code === codeIdeographicSpace || code === codeZeroWidthNoBreakSpace;
+}
+
+/**
+ * Test whether the given character is a quote or double quote character.
+ * Also tests for special variants of quotes.
+ */
+function isQuote(char) {
+  // the first check double quotes, since that occurs most often
+  return isDoubleQuoteLike(char) || isSingleQuoteLike(char);
+}
+
+/**
+ * Test whether the given character is a double quote character.
+ * Also tests for special variants of double quotes.
+ */
+function isDoubleQuoteLike(char) {
+  return char === '"' || char === '\u201c' || char === '\u201d';
+}
+
+/**
+ * Test whether the given character is a double quote character.
+ * Does NOT test for special variants of double quotes.
+ */
+function isDoubleQuote(char) {
+  return char === '"';
+}
+
+/**
+ * Test whether the given character is a single quote character.
+ * Also tests for special variants of single quotes.
+ */
+function isSingleQuoteLike(char) {
+  return char === "'" || char === '\u2018' || char === '\u2019' || char === '\u0060' || char === '\u00b4';
+}
+
+/**
+ * Test whether the given character is a single quote character.
+ * Does NOT test for special variants of single quotes.
+ */
+function isSingleQuote(char) {
+  return char === "'";
+}
+
+/**
+ * Strip last occurrence of textToStrip from text
+ */
+function stripLastOccurrence(text, textToStrip) {
+  let stripRemainingText = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+  const index = text.lastIndexOf(textToStrip);
+  return index !== -1 ? text.substring(0, index) + (stripRemainingText ? '' : text.substring(index + 1)) : text;
+}
+function insertBeforeLastWhitespace(text, textToInsert) {
+  let index = text.length;
+  if (!isWhitespace(text, index - 1)) {
+    // no trailing whitespaces
+    return text + textToInsert;
+  }
+  while (isWhitespace(text, index - 1)) {
+    index--;
+  }
+  return text.substring(0, index) + textToInsert + text.substring(index);
+}
+function removeAtIndex(text, start, count) {
+  return text.substring(0, start) + text.substring(start + count);
+}
+
+/**
+ * Test whether a string ends with a newline or comma character and optional whitespace
+ */
+function endsWithCommaOrNewline(text) {
+  return /[,\n][ \t\r]*$/.test(text);
+}
+const namedHtmlEntities = {
+  '&quot;': '"',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&apos;': "'"
+};
+
+// the longest entity we need to recognize is a numeric one like "&#x10FFFF;"
+// (10 chars), so a window of 12 characters is always enough
+const maxHtmlEntityLength = exports.maxHtmlEntityLength = 12;
+/**
+ * Try to match an HTML entity at the start of the given fragment. The fragment
+ * is a small slice of text that begins exactly at the candidate '&'. Returns the
+ * decoded character and the number of characters consumed, or null when there
+ * is no complete, valid entity (for example a truncated "&quot" without ';').
+ */
+function matchHtmlEntity(fragment) {
+  if (fragment.charAt(0) !== '&') {
+    return null;
+  }
+  const semicolon = fragment.indexOf(';');
+  if (semicolon === -1) {
+    return null;
+  }
+  const entity = fragment.substring(0, semicolon + 1);
+  const named = namedHtmlEntities[entity];
+  if (named !== undefined) {
+    return {
+      char: named,
+      length: entity.length
+    };
+  }
+  if (fragment.charAt(1) === '#') {
+    const body = fragment.substring(2, semicolon);
+    const hex = body.charAt(0) === 'x' || body.charAt(0) === 'X';
+    const digits = hex ? body.substring(1) : body;
+    if (digits.length > 0) {
+      const code = Number.parseInt(digits, hex ? 16 : 10);
+      if (!Number.isNaN(code) && code >= 0 && code <= 0x10ffff) {
+        return {
+          char: String.fromCodePoint(code),
+          length: entity.length
+        };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Test whether a matched HTML entity decodes to a double quote character
+ */
+function isDoubleQuoteEntity(match) {
+  return match !== null && match.char === '"';
+}
+
+/**
+ * Test whether a matched HTML entity decodes to a single quote character
+ */
+function isSingleQuoteEntity(match) {
+  return match !== null && match.char === "'";
+}
+
+/**
+ * Count the number of occurrences of a single character in a string
+ */
+function countOccurrences(text, char) {
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charAt(i) === char) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Test whether `closeChar` is a closing bracket and `text` still contains an
+ * unmatched opening bracket of the same kind. This indicates that the end of
+ * `text` is located inside the brackets, for example the quote in
+ * `"a (b") c"` is followed by `)` while `(` is still unclosed.
+ *
+ * Note that the (potentially expensive) counting is only performed when
+ * `closeChar` actually is a closing bracket.
+ */
+function isInsideUnclosedBracket(text, closeChar) {
+  switch (closeChar) {
+    case ')':
+      return countOccurrences(text, '(') > countOccurrences(text, ')');
+    case ']':
+      return countOccurrences(text, '[') > countOccurrences(text, ']');
+    case '}':
+      return countOccurrences(text, '{') > countOccurrences(text, '}');
+    default:
+      return false;
+  }
+}
+//# sourceMappingURL=stringUtils.js.map
 
 /***/ }),
 
