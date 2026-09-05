@@ -1,4 +1,4 @@
-name: ai-code-review
+name: reviewally
 
 on:
   pull_request:
@@ -7,16 +7,16 @@ on:
     types: [created]
 
 concurrency:
-  group: ai-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: reviewally-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
   review:
     if: |
       (github.event_name == 'pull_request' &&
-        (github.event.action != 'labeled' || github.event.label.name == 'ai-review'))
+        (github.event.action != 'labeled' || github.event.label.name == 'reviewally'))
       || (github.event_name == 'issue_comment' &&
-        startsWith(github.event.comment.body, '/ai-review') &&
+        startsWith(github.event.comment.body, '/reviewally') &&
         github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
     permissions:
@@ -30,5 +30,5 @@ jobs:
           api-type: openai-chat-compatible
           model: deepseek-v4-flash
           base-url: 'https://opencode.ai/zen/go/v1'
-          api-key: ${{ secrets.AI_CODE_REVIEW_LLM_API_KEY }}
+          api-key: ${{ secrets.REVIEWALLY_API_KEY }}
           auto-review: 'true'

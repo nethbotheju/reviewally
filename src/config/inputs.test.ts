@@ -59,8 +59,8 @@ describe('getInputs', () => {
       apiKey: 'sk-test',
       model: 'gpt-4o',
       githubToken: 'ghp_test',
-      triggerComment: '/ai-review',
-      triggerLabel: 'ai-review',
+      triggerComment: '/reviewally',
+      triggerLabel: 'reviewally',
       autoReview: false,
       maxFiles: 20,
       maxDiffLines: 3000,
@@ -69,7 +69,7 @@ describe('getInputs', () => {
       agentTarballMaxMb: 200,
       piVersion: '0.82.1',
       piTimeoutMs: 600000,
-      contextDocs: ['AGENTS.md', '.ai-review.md', 'CONTRIBUTING.md'],
+      contextDocs: ['AGENTS.md', '.reviewally.md', 'CONTRIBUTING.md'],
     });
   });
 

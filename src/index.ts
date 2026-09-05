@@ -164,7 +164,7 @@ async function run(): Promise<void> {
     }
     const repairNote = repaired ? ' (note: the model response had required JSON repair)' : '';
     core.setFailed(
-      `AI code review failed: ${e.message}${repairNote}${e.stack ? `\n${e.stack}` : ''}`,
+      `ReviewAlly review failed: ${e.message}${repairNote}${e.stack ? `\n${e.stack}` : ''}`,
     );
   } finally {
     if (repoRoot) {

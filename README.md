@@ -51,9 +51,9 @@ jobs:
   review:
     if: |
       (github.event_name == 'pull_request' &&
-        (github.event.action != 'labeled' || github.event.label.name == 'ai-review'))
+        (github.event.action != 'labeled' || github.event.label.name == 'reviewally'))
       || (github.event_name == 'issue_comment' &&
-        startsWith(github.event.comment.body, '/ai-review') &&
+        startsWith(github.event.comment.body, '/reviewally') &&
         github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
     permissions:
@@ -72,7 +72,7 @@ jobs:
 ```
 
 3. Add one repository secret — `REVIEWALLY_API_KEY` — with your provider API key.
-4. Open a pull request, or comment `/ai-review` on one.
+4. Open a pull request, or comment `/reviewally` on one.
 
 ## Review modes
 
@@ -94,8 +94,8 @@ For deeper changes, ReviewAlly takes a snapshot of the repository at the PR head
 | `model` | yes | — | Model identifier |
 | `app-token-url` | no | — | ReviewAlly token endpoint; reviews post as `reviewally[bot]` |
 | `github-token` | no | `${{ github.token }}` | Token for reading the PR and posting the review |
-| `trigger-comment` | no | `/ai-review` | Slash command that triggers a review |
-| `trigger-label` | no | `ai-review` | Label that triggers a review |
+| `trigger-comment` | no | `/reviewally` | Slash command that triggers a review |
+| `trigger-label` | no | `reviewally` | Label that triggers a review |
 | `auto-review` | no | `false` | Also review on PR open/reopen/push |
 | `review-mode` | no | `standard` | `standard` (single prompt) or `agent` (investigation loop) |
 | `max-files` | no | `20` | Max changed files reviewed per run |
@@ -103,7 +103,7 @@ For deeper changes, ReviewAlly takes a snapshot of the repository at the PR head
 | `exclude-patterns` | no | — | Extra glob excludes (comma/newline separated) |
 | `use-default-excludes` | no | `true` | Built-in excludes for lockfiles, minified files, sourcemaps |
 | `extra-instructions` | no | — | Extra guidance appended to the prompt |
-| `context-docs` | no | `AGENTS.md,.ai-review.md,CONTRIBUTING.md` | Repo docs included for project guidance |
+| `context-docs` | no | `AGENTS.md,.reviewally.md,CONTRIBUTING.md` | Repo docs included for project guidance |
 | `agent-tarball-max-mb` | no | `200` | Max repo snapshot size before degrading to standard mode |
 | `pi-version` | no | `0.82.1` | Agent runtime version |
 | `pi-timeout-ms` | no | `600000` | Hard timeout for an agent-mode review |

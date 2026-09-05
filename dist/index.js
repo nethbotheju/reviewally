@@ -31031,8 +31031,8 @@ function getInputs() {
         }
         appTokenUrl = parsed.toString();
     }
-    const triggerComment = core.getInput('trigger-comment').trim() || '/ai-review';
-    const triggerLabel = core.getInput('trigger-label').trim() || 'ai-review';
+    const triggerComment = core.getInput('trigger-comment').trim() || '/reviewally';
+    const triggerLabel = core.getInput('trigger-label').trim() || 'reviewally';
     const autoReview = core.getBooleanInput('auto-review');
     const maxFiles = parseIntInput('max-files', 20);
     const maxDiffLines = parseIntInput('max-diff-lines', 3000);
@@ -31068,7 +31068,7 @@ function getInputs() {
         extraInstructions,
         reviewMode,
         agentTarballMaxMb,
-        contextDocs: contextDocs.length > 0 ? contextDocs : ['AGENTS.md', '.ai-review.md', 'CONTRIBUTING.md'],
+        contextDocs: contextDocs.length > 0 ? contextDocs : ['AGENTS.md', '.reviewally.md', 'CONTRIBUTING.md'],
         piVersion,
         piTimeoutMs,
     };
@@ -31561,7 +31561,7 @@ async function run() {
             core.endGroup();
         }
         const repairNote = repaired ? ' (note: the model response had required JSON repair)' : '';
-        core.setFailed(`AI code review failed: ${e.message}${repairNote}${e.stack ? `\n${e.stack}` : ''}`);
+        core.setFailed(`ReviewAlly review failed: ${e.message}${repairNote}${e.stack ? `\n${e.stack}` : ''}`);
     }
     finally {
         if (repoRoot) {
@@ -31869,7 +31869,7 @@ function isPiEvent(value) {
 }
 /** Directory where pi is installed on the runner. */
 function installDir(version) {
-    return path.join(os.homedir(), '.cache', 'ai-code-review-pi', version);
+    return path.join(os.homedir(), '.cache', 'reviewally-pi', version);
 }
 /** Absolute path to the bundled CLI entry inside the install dir. */
 function cliEntryPath(version) {
@@ -32139,7 +32139,7 @@ async function prepareRepoSnapshot(octokit, owner, repo, ref, maxMb) {
     if (contentLengthMb != null && contentLengthMb > maxMb) {
         throw new RepoTooLargeError(Math.round(contentLengthMb * 10) / 10, maxMb);
     }
-    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-'));
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reviewally-'));
     try {
         const tarballPath = path.join(workDir, 'repo.tar.gz');
         fs.writeFileSync(tarballPath, buffer);
