@@ -1,10 +1,20 @@
 # ReviewAlly — copy into your repo at .github/workflows/reviewally.yml
 #
-# Requires: the ReviewAlly App installed (github.com/apps/reviewally) and one
-# repository secret: REVIEWALLY_API_KEY (your provider API key).
+# Requires (one-time setup, all in the GitHub UI):
+#   1. The ReviewAlly App installed (github.com/apps/reviewally)
+#   2. One repository secret: REVIEWALLY_API_KEY (your provider API key)
+#   3. Repository variables (Settings → Secrets and variables → Actions → Variables):
+#        REVIEWALLY_API_TYPE   openai | openai-chat-compatible | anthropic
+#        REVIEWALLY_MODEL      e.g. gpt-4o
+#        REVIEWALLY_BASE_URL   only for openai-chat-compatible providers
+#
+# Model, review mode, auto-review, extra instructions, and excludes are all
+# managed via REVIEWALLY_* variables — see the README. Adding one of them as
+# an input below pins it for this workflow (inputs override variables).
 #
 # Triggers: add the "reviewally" label to a PR, or comment "/reviewally".
-# Set auto-review: 'true' to also review on open / reopen / push.
+# Set the REVIEWALLY_AUTO_REVIEW variable to 'true' to also review on
+# open / reopen / push.
 
 name: reviewally
 
@@ -34,10 +44,7 @@ jobs:
       - uses: nethbotheju/reviewally@v1
         with:
           app-token-url: https://api.reviewally.nethbotheju.dev/token
-          api-type: openai            # openai | openai-chat-compatible | anthropic
-          model: gpt-4o
           api-key: ${{ secrets.REVIEWALLY_API_KEY }}
-          # base-url: 'https://opencode.ai/zen/go/v1'   # only for openai-chat-compatible
-          # review-mode: agent         # deep repo-aware investigation
-          # auto-review: 'true'
-          # extra-instructions: '...'
+          # Uncomment to pin a setting for this workflow (overrides the variable):
+          # model: gpt-4o
+          # review-mode: agent
