@@ -74,7 +74,10 @@ describe('resolveInputs', () => {
   });
 
   it('fills an omitted input from the repository variable', () => {
-    const config = resolveInputs(rawInputs({ model: undefined }), vars({ REVIEWALLY_MODEL: 'deepseek-v4-flash' }));
+    const config = resolveInputs(
+      rawInputs({ model: undefined }),
+      vars({ REVIEWALLY_MODEL: 'deepseek-v4-flash' }),
+    );
     expect(config.inputs.model).toBe('deepseek-v4-flash');
     expect(config.sources.model).toBe('repo variable');
   });
@@ -153,7 +156,10 @@ describe('resolveInputs', () => {
     );
     expect(config.inputs.reviewMode).toBe('agent');
     expect(() =>
-      resolveInputs(rawInputs({ reviewMode: undefined }), vars({ REVIEWALLY_REVIEW_MODE: 'hybrid' })),
+      resolveInputs(
+        rawInputs({ reviewMode: undefined }),
+        vars({ REVIEWALLY_REVIEW_MODE: 'hybrid' }),
+      ),
     ).toThrow(/Invalid review-mode 'hybrid' \(from repository variable REVIEWALLY_REVIEW_MODE\)/);
   });
 
@@ -204,11 +210,7 @@ describe('configSummaryRows', () => {
     expect(byLabel.get('model')).toEqual(['model', 'deepseek-v4-flash', 'repo variable']);
     expect(byLabel.get('review-mode')).toEqual(['review-mode', 'agent', 'workflow input']);
     expect(byLabel.get('auto-review')).toEqual(['auto-review', 'false', 'workflow input']);
-    expect(byLabel.get('extra-instructions')).toEqual([
-      'extra-instructions',
-      '(none)',
-      'default',
-    ]);
+    expect(byLabel.get('extra-instructions')).toEqual(['extra-instructions', '(none)', 'default']);
     expect(rows).toHaveLength(9);
   });
 

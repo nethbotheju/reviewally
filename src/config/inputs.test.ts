@@ -19,7 +19,7 @@ const OPTIONAL_DEFAULTS: Record<string, string> = {
   'INPUT_PI-TIMEOUT-MS': '',
   'INPUT_API-TYPE': '',
   'INPUT_BASE-URL': '',
-  'INPUT_MODEL': '',
+  INPUT_MODEL: '',
   'INPUT_APP-TOKEN-URL': '',
 };
 
@@ -74,7 +74,7 @@ describe('getRawInputs', () => {
   it('reads variable-resolvable knobs as raw strings without validation', () => {
     setEnv({
       'INPUT_API-TYPE': 'not-a-real-type',
-      'INPUT_MODEL': 'some-model',
+      INPUT_MODEL: 'some-model',
       'INPUT_REVIEW-MODE': 'AGENT',
       'INPUT_BASE-URL': 'https://x/v1',
     });

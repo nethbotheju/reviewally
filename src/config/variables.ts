@@ -192,6 +192,7 @@ export function configSummaryRows(config: ResolvedConfig): string[][] {
 
 export function warnVariablesUnavailable(err: unknown): void {
   core.warning(
-    `Could not read repository variables — REVIEWALLY_* config overrides are ignored this run (${(err as Error).message}).`,
+    `Could not read repository variables — REVIEWALLY_* config overrides are ignored this run (${(err as Error).message}). ` +
+      'Grant the workflow `actions: read` permission to enable them.',
   );
 }

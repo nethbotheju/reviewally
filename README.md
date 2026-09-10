@@ -69,6 +69,7 @@ jobs:
         github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
     permissions:
+      actions: read    # lets ReviewAlly read REVIEWALLY_* repository variables
       contents: read
       pull-requests: write
     steps:
@@ -120,6 +121,8 @@ For deeper changes, ReviewAlly takes a snapshot of the repository at the PR head
 ## Repository variables
 
 **ReviewAlly's behavior is controlled here — no workflow edits, no commits, ever.** These repository variables (Settings → Secrets and variables → Actions → Variables) take effect from the next review onward. Resolution per setting: **workflow input > repository variable > built-in default** — an input written in the workflow always wins, so leave it out of the workflow to let the variable apply.
+
+Reading them requires the `actions: read` permission on the workflow (already included in the example above) — when a workflow sets a `permissions:` block, every unlisted permission is `none`. Without it, ReviewAlly warns and falls back to the workflow inputs.
 
 | Variable | Sets |
 | --- | --- |

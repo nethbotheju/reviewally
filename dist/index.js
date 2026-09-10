@@ -31231,7 +31231,8 @@ function configSummaryRows(config) {
     ];
 }
 function warnVariablesUnavailable(err) {
-    core.warning(`Could not read repository variables — REVIEWALLY_* config overrides are ignored this run (${err.message}).`);
+    core.warning(`Could not read repository variables — REVIEWALLY_* config overrides are ignored this run (${err.message}). ` +
+        'Grant the workflow `actions: read` permission to enable them.');
 }
 
 
@@ -32403,8 +32404,20 @@ function buildRepoTree(root, inputs, maxEntries = MAX_TREE_ENTRIES) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createModel = createModel;
+const node_crypto_1 = __nccwpck_require__(7598);
 const openai_1 = __nccwpck_require__(3436);
 const anthropic_1 = __nccwpck_require__(9930);
+const USER_AGENT = 'reviewally';
+/** OpenCode Zen requires clients to identify themselves and send a stable session id. */
+function isOpenCodeZen(baseUrl) {
+    try {
+        const host = new URL(baseUrl).hostname.toLowerCase();
+        return host === 'opencode.ai' || host.endsWith('.opencode.ai');
+    }
+    catch {
+        return false;
+    }
+}
 function createModel(inputs) {
     switch (inputs.apiType) {
         case 'openai': {
@@ -32415,7 +32428,10 @@ function createModel(inputs) {
             if (!inputs.baseUrl) {
                 throw new Error("'base-url' is required when api-type is 'openai-chat-compatible'.");
             }
-            const factory = (0, openai_1.createOpenAI)({ apiKey: inputs.apiKey, baseURL: inputs.baseUrl });
+            const headers = { 'user-agent': USER_AGENT };
+            if (isOpenCodeZen(inputs.baseUrl))
+                headers['x-opencode-session'] = (0, node_crypto_1.randomUUID)();
+            const factory = (0, openai_1.createOpenAI)({ apiKey: inputs.apiKey, baseURL: inputs.baseUrl, headers });
             return factory.chat(inputs.model);
         }
         case 'anthropic': {

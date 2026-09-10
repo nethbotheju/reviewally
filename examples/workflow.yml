@@ -38,6 +38,7 @@ jobs:
         github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
     permissions:
+      actions: read        # required to read REVIEWALLY_* repository variables
       contents: read
       pull-requests: write
     steps:
