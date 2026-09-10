@@ -18,6 +18,8 @@ Branded identity comes from a hosted token minter (`minter/`, see below): consum
 - Bundle only (skip typecheck): `npm run bundle`
 - Test: `npm test` (vitest)
 - Watch tests: `npm run test:watch`
+- Lint: `npm run lint` (eslint)
+- Format check / fix: `npm run format:check` / `npm run format` (prettier, `src/**/*.ts`)
 
 ## Development Workflow
 
@@ -39,7 +41,7 @@ Branded identity comes from a hosted token minter (`minter/`, see below): consum
 
 - TypeScript with strict mode (`strict: true` in tsconfig.json)
 - Uses `@vercel/ncc` for bundling (CJS output)
-- No ESLint config — rely on TypeScript compiler checks (`tsc --noEmit`)
+- `npm run lint` (eslint) and `npm run format:check` (prettier) gate CI alongside `tsc --noEmit` — run `npm run format` before committing
 - Import ordering: Node built-ins → external deps → internal modules (relative paths)
 - Use `import type` for type-only imports
 - Async functions use `async/await` over raw promises
@@ -55,7 +57,8 @@ src/
   index.ts                   # entry: resolve inputs → branded token swap → trigger → mode dispatch → post
   config/
     inputs.ts                # action input parsing (enforces https:// on app-token-url)
-    types.ts                 # ActionInputs, ApiType, ReviewMode, RepoRoot
+    variables.ts             # REVIEWALLY_* repo-variable layer: resolution chain + run-summary rows
+    types.ts                 # ActionInputs, RawActionInputs, ApiType, ReviewMode, RepoRoot
   github/
     trigger.ts               # event/trigger resolution (PR label, comment, auto)
     pull-request.ts          # fetch PR + changed files + annotate patch diff
@@ -147,4 +150,5 @@ git push origin v1 --force
 - The pi engine is NOT bundled — it's installed at runtime via `npm install` on the runner (`agent/engine/install.ts`). The `dist/index.js` bundle stays ~4MB; pi's ~170MB of deps live in the install dir.
 - The minter is NOT part of the bundle either — changes to `minter/` go live only after `wrangler deploy`.
 - `app-token-url` must be `https://` — enforced at input parse time (`config/inputs.ts`).
+- The repo-variable config layer reads `REVIEWALLY_*` from **env**, never the REST API: `GITHUB_TOKEN` is not an allowed token for `GET /repos/{owner}/{repo}/actions/variables` (that needs an App token or PAT with the "Variables" read permission, and `actions: read` does NOT grant it). Workflows therefore forward values with `env: REVIEWALLY_MODEL: ${{ vars.REVIEWALLY_MODEL }}`. Resolution is workflow input > repo variable > built-in default, and validation runs on the *resolved* value — see `config/variables.ts`.
 - The dogfood model (`deepseek-v4-flash` via OpenCode Zen) was chosen because it reliably returns JSON; models that answer in prose break `parseReview`.
