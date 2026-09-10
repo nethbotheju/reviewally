@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import { getOctokit } from '@actions/github';
-import { getInputs } from './config/inputs';
+import { getRawInputs } from './config/inputs';
+import { repoVariablesFromEnv, resolveInputs, configSummaryRows } from './config/variables';
 import { resolveTrigger } from './github/trigger';
 import { fetchAppToken, AppNotInstalledError } from './github/app-token';
 import {
@@ -30,14 +31,19 @@ async function run(): Promise<void> {
   let modelResponse = '';
 
   try {
-    const inputs = getInputs();
-    core.setSecret(inputs.apiKey);
+    const raw = getRawInputs();
+    core.setSecret(raw.apiKey);
+
+    const config = resolveInputs(raw, repoVariablesFromEnv());
+    const inputs = config.inputs;
 
     const trigger = resolveTrigger(inputs);
     if (!trigger.run || !trigger.review) {
       core.info(`Skipping: ${trigger.reason}`);
       return;
     }
+
+    core.summary.addTable(configSummaryRows(config)).write();
 
     const { owner, repo, pullNumber, commentId } = trigger.review;
 

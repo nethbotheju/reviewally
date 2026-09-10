@@ -33,3 +33,42 @@ export interface RepoRoot {
   /** Temp working directory to remove on cleanup. */
   workDir: string;
 }
+
+export type ConfigSource = 'workflow input' | 'repo variable' | 'default';
+
+export type ConfigKnob =
+  | 'apiType'
+  | 'baseUrl'
+  | 'model'
+  | 'reviewMode'
+  | 'autoReview'
+  | 'extraInstructions'
+  | 'contextDocs'
+  | 'excludePatterns';
+
+export type ConfigSources = Partial<Record<ConfigKnob, ConfigSource>>;
+
+/** Workflow inputs as written; the variable-resolvable knobs are raw and unvalidated. */
+export interface RawActionInputs {
+  apiType?: string;
+  apiKey: string;
+  baseUrl?: string;
+  model?: string;
+  githubToken: string;
+  appTokenUrl?: string;
+  triggerComment: string;
+  triggerLabel: string;
+  autoReview?: string;
+  maxFiles: number;
+  maxDiffLines: number;
+  useDefaultExcludes: boolean;
+  reviewMode?: string;
+  agentTarballMaxMb: number;
+  piVersion: string;
+  piTimeoutMs: number;
+}
+
+export interface ResolvedConfig {
+  inputs: ActionInputs;
+  sources: ConfigSources;
+}

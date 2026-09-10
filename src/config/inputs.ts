@@ -1,18 +1,9 @@
 import * as core from '@actions/core';
-import type { ActionInputs, ApiType, ReviewMode } from './types';
+import type { RawActionInputs } from './types';
 
-const VALID_API_TYPES = new Set<ApiType>(['openai', 'openai-chat-compatible', 'anthropic']);
-const VALID_REVIEW_MODES = new Set<ReviewMode>(['standard', 'agent']);
 const DEFAULT_PI_VERSION = '0.82.1';
 // Injection-safe version spec (semver, prerelease, dist-tag). No spaces/shell metachars.
 const VERSION_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._+\-]*$/;
-
-function parseList(value: string): string[] {
-  return value
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 function parseIntInput(name: string, fallback: number): number {
   const raw = core.getInput(name).trim();
@@ -24,25 +15,16 @@ function parseIntInput(name: string, fallback: number): number {
   return n;
 }
 
-export function getInputs(): ActionInputs {
-  const apiTypeRaw = core.getInput('api-type', { required: true }).trim();
-  if (!VALID_API_TYPES.has(apiTypeRaw as ApiType)) {
-    throw new Error(
-      `Invalid api-type '${apiTypeRaw}'. Must be one of: ${[...VALID_API_TYPES].join(', ')}`,
-    );
-  }
-  const apiType = apiTypeRaw as ApiType;
+function optionalInput(name: string): string | undefined {
+  const raw = core.getInput(name).trim();
+  return raw === '' ? undefined : raw;
+}
 
+export function getRawInputs(): RawActionInputs {
   const apiKey = core.getInput('api-key', { required: true });
-  const baseUrl = core.getInput('base-url').trim() || undefined;
-
-  if (apiType === 'openai-chat-compatible' && !baseUrl) {
-    throw new Error("'base-url' is required when api-type is 'openai-chat-compatible'.");
-  }
-
-  const model = core.getInput('model', { required: true });
   const githubToken = core.getInput('github-token', { required: true });
-  let appTokenUrl = core.getInput('app-token-url').trim() || undefined;
+
+  let appTokenUrl = optionalInput('app-token-url');
   if (appTokenUrl) {
     let parsed: URL;
     try {
@@ -58,55 +40,30 @@ export function getInputs(): ActionInputs {
     }
     appTokenUrl = parsed.toString();
   }
-  const triggerComment = core.getInput('trigger-comment').trim() || '/reviewally';
-  const triggerLabel = core.getInput('trigger-label').trim() || 'reviewally';
-  const autoReview = core.getBooleanInput('auto-review');
-  const maxFiles = parseIntInput('max-files', 20);
-  const maxDiffLines = parseIntInput('max-diff-lines', 3000);
-  const excludePatterns = parseList(core.getInput('exclude-patterns'));
-  const useDefaultExcludes = core.getBooleanInput('use-default-excludes');
-  const extraInstructions = core.getInput('extra-instructions').trim() || undefined;
 
-  const reviewModeRaw = core.getInput('review-mode').trim().toLowerCase() || 'standard';
-  if (!VALID_REVIEW_MODES.has(reviewModeRaw as ReviewMode)) {
-    throw new Error(
-      `Invalid review-mode '${reviewModeRaw}'. Must be one of: ${[...VALID_REVIEW_MODES].join(', ')}`,
-    );
-  }
-  const reviewMode = reviewModeRaw as ReviewMode;
-
-  const agentTarballMaxMb = parseIntInput('agent-tarball-max-mb', 200);
-  const contextDocs = parseList(core.getInput('context-docs'));
-
-  const piVersion = core.getInput('pi-version').trim() || DEFAULT_PI_VERSION;
+  const piVersion = optionalInput('pi-version') ?? DEFAULT_PI_VERSION;
   if (!VERSION_PATTERN.test(piVersion)) {
     throw new Error(
       `Invalid pi-version '${piVersion}'. Must be a plain version or dist-tag (e.g. 0.82.1, latest).`,
     );
   }
 
-  const piTimeoutMs = parseIntInput('pi-timeout-ms', 600000);
-
   return {
-    apiType,
+    apiType: optionalInput('api-type'),
     apiKey,
-    baseUrl,
-    model,
+    baseUrl: optionalInput('base-url'),
+    model: optionalInput('model'),
     githubToken,
     appTokenUrl,
-    triggerComment,
-    triggerLabel,
-    autoReview,
-    maxFiles,
-    maxDiffLines,
-    excludePatterns,
-    useDefaultExcludes,
-    extraInstructions,
-    reviewMode,
-    agentTarballMaxMb,
-    contextDocs:
-      contextDocs.length > 0 ? contextDocs : ['AGENTS.md', '.reviewally.md', 'CONTRIBUTING.md'],
+    triggerComment: optionalInput('trigger-comment') ?? '/reviewally',
+    triggerLabel: optionalInput('trigger-label') ?? 'reviewally',
+    autoReview: optionalInput('auto-review'),
+    maxFiles: parseIntInput('max-files', 20),
+    maxDiffLines: parseIntInput('max-diff-lines', 3000),
+    useDefaultExcludes: core.getBooleanInput('use-default-excludes'),
+    reviewMode: optionalInput('review-mode')?.toLowerCase(),
+    agentTarballMaxMb: parseIntInput('agent-tarball-max-mb', 200),
     piVersion,
-    piTimeoutMs,
+    piTimeoutMs: parseIntInput('pi-timeout-ms', 600000),
   };
 }

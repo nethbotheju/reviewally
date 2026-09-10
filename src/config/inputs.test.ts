@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getInputs } from './inputs';
+import { getRawInputs } from './inputs';
 
 const REQUIRED: Record<string, string> = {
-  'INPUT_API-TYPE': 'openai',
   'INPUT_API-KEY': 'sk-test',
-  INPUT_MODEL: 'gpt-4o',
   'INPUT_GITHUB-TOKEN': 'ghp_test',
 };
 
@@ -14,15 +12,15 @@ const OPTIONAL_DEFAULTS: Record<string, string> = {
   'INPUT_AUTO-REVIEW': 'false',
   'INPUT_MAX-FILES': '',
   'INPUT_MAX-DIFF-LINES': '',
-  'INPUT_EXCLUDE-PATTERNS': '',
   'INPUT_USE-DEFAULT-EXCLUDES': 'true',
-  'INPUT_EXTRA-INSTRUCTIONS': '',
   'INPUT_REVIEW-MODE': '',
   'INPUT_AGENT-TARBALL-MAX-MB': '',
-  'INPUT_CONTEXT-DOCS': '',
   'INPUT_PI-VERSION': '',
   'INPUT_PI-TIMEOUT-MS': '',
+  'INPUT_API-TYPE': '',
   'INPUT_BASE-URL': '',
+  INPUT_MODEL: '',
+  'INPUT_APP-TOKEN-URL': '',
 };
 
 let savedEnv: Record<string, string | undefined>;
@@ -50,93 +48,82 @@ function setEnv(overrides: Record<string, string> = {}): void {
   }
 }
 
-describe('getInputs', () => {
-  it('returns parsed inputs with defaults', () => {
+describe('getRawInputs', () => {
+  it('returns raw inputs with workflow-only defaults', () => {
     setEnv();
-    const inputs = getInputs();
-    expect(inputs).toMatchObject({
-      apiType: 'openai',
+    const raw = getRawInputs();
+    expect(raw).toMatchObject({
       apiKey: 'sk-test',
-      model: 'gpt-4o',
       githubToken: 'ghp_test',
       triggerComment: '/reviewally',
       triggerLabel: 'reviewally',
-      autoReview: false,
+      autoReview: 'false',
       maxFiles: 20,
       maxDiffLines: 3000,
       useDefaultExcludes: true,
-      reviewMode: 'standard',
       agentTarballMaxMb: 200,
       piVersion: '0.82.1',
       piTimeoutMs: 600000,
-      contextDocs: ['AGENTS.md', '.reviewally.md', 'CONTRIBUTING.md'],
+      apiType: undefined,
+      baseUrl: undefined,
+      model: undefined,
+      reviewMode: undefined,
     });
   });
 
-  it('accepts user-supplied contextDocs and skips the default', () => {
-    setEnv({ 'INPUT_CONTEXT-DOCS': 'docs/foo.md, docs/bar.md' });
-    expect(getInputs().contextDocs).toEqual(['docs/foo.md', 'docs/bar.md']);
-  });
-
-  it('throws on invalid api-type', () => {
-    setEnv({ 'INPUT_API-TYPE': 'bogus' });
-    expect(() => getInputs()).toThrow(/Invalid api-type 'bogus'/);
-  });
-
-  it('throws on invalid review-mode', () => {
-    setEnv({ 'INPUT_REVIEW-MODE': 'hybrid' });
-    expect(() => getInputs()).toThrow(/Invalid review-mode 'hybrid'/);
+  it('reads variable-resolvable knobs as raw strings without validation', () => {
+    setEnv({
+      'INPUT_API-TYPE': 'not-a-real-type',
+      INPUT_MODEL: 'some-model',
+      'INPUT_REVIEW-MODE': 'AGENT',
+      'INPUT_BASE-URL': 'https://x/v1',
+    });
+    const raw = getRawInputs();
+    expect(raw.apiType).toBe('not-a-real-type');
+    expect(raw.model).toBe('some-model');
+    expect(raw.reviewMode).toBe('agent');
+    expect(raw.baseUrl).toBe('https://x/v1');
   });
 
   it('throws on non-numeric max-files', () => {
     setEnv({ 'INPUT_MAX-FILES': 'abc' });
-    expect(() => getInputs()).toThrow(/Invalid max-files/);
+    expect(() => getRawInputs()).toThrow(/Invalid max-files/);
   });
 
   it('throws on negative max-files', () => {
     setEnv({ 'INPUT_MAX-FILES': '-5' });
-    expect(() => getInputs()).toThrow(/Invalid max-files/);
+    expect(() => getRawInputs()).toThrow(/Invalid max-files/);
   });
 
   it('throws on non-numeric pi-timeout-ms', () => {
     setEnv({ 'INPUT_PI-TIMEOUT-MS': 'forever' });
-    expect(() => getInputs()).toThrow(/Invalid pi-timeout-ms/);
+    expect(() => getRawInputs()).toThrow(/Invalid pi-timeout-ms/);
   });
 
   it('throws on pi-version with shell metacharacters', () => {
     setEnv({ 'INPUT_PI-VERSION': '0.82.1; rm -rf /' });
-    expect(() => getInputs()).toThrow(/Invalid pi-version/);
+    expect(() => getRawInputs()).toThrow(/Invalid pi-version/);
   });
 
   it('accepts semver, prerelease, and dist-tag pi-versions', () => {
     for (const v of ['0.82.1', '1.0.0-rc.1', 'latest', 'next']) {
       setEnv({ 'INPUT_PI-VERSION': v });
-      expect(getInputs().piVersion).toBe(v);
+      expect(getRawInputs().piVersion).toBe(v);
     }
-  });
-
-  it('requires base-url for openai-chat-compatible', () => {
-    setEnv({ 'INPUT_API-TYPE': 'openai-chat-compatible' });
-    expect(() => getInputs()).toThrow(/base-url.*required/);
-  });
-
-  it('accepts base-url for openai-chat-compatible', () => {
-    setEnv({ 'INPUT_API-TYPE': 'openai-chat-compatible', 'INPUT_BASE-URL': 'https://x/v1' });
-    expect(getInputs().baseUrl).toBe('https://x/v1');
   });
 
   it('accepts an https app-token-url', () => {
     setEnv({ 'INPUT_APP-TOKEN-URL': 'https://api.reviewally.nethbotheju.dev/token' });
-    expect(getInputs().appTokenUrl).toBe('https://api.reviewally.nethbotheju.dev/token');
+    expect(getRawInputs().appTokenUrl).toBe('https://api.reviewally.nethbotheju.dev/token');
   });
 
   it('rejects an http app-token-url (token would leak in cleartext)', () => {
     setEnv({ 'INPUT_APP-TOKEN-URL': 'http://api.reviewally.nethbotheju.dev/token' });
-    expect(() => getInputs()).toThrow(/app-token-url.*https/);
+    expect(() => getRawInputs()).toThrow(/app-token-url.*https/);
   });
 
   it('rejects a malformed app-token-url', () => {
     setEnv({ 'INPUT_APP-TOKEN-URL': 'not a url' });
-    expect(() => getInputs()).toThrow(/Invalid app-token-url/);
+    expect(() => getRawInputs()).toThrow(/Invalid app-token-url/);
   });
 });

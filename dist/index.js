@@ -30980,19 +30980,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getInputs = getInputs;
+exports.getRawInputs = getRawInputs;
 const core = __importStar(__nccwpck_require__(7484));
-const VALID_API_TYPES = new Set(['openai', 'openai-chat-compatible', 'anthropic']);
-const VALID_REVIEW_MODES = new Set(['standard', 'agent']);
 const DEFAULT_PI_VERSION = '0.82.1';
 // Injection-safe version spec (semver, prerelease, dist-tag). No spaces/shell metachars.
 const VERSION_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._+\-]*$/;
-function parseList(value) {
-    return value
-        .split(/[\n,]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-}
 function parseIntInput(name, fallback) {
     const raw = core.getInput(name).trim();
     if (raw === '')
@@ -31003,20 +30995,14 @@ function parseIntInput(name, fallback) {
     }
     return n;
 }
-function getInputs() {
-    const apiTypeRaw = core.getInput('api-type', { required: true }).trim();
-    if (!VALID_API_TYPES.has(apiTypeRaw)) {
-        throw new Error(`Invalid api-type '${apiTypeRaw}'. Must be one of: ${[...VALID_API_TYPES].join(', ')}`);
-    }
-    const apiType = apiTypeRaw;
+function optionalInput(name) {
+    const raw = core.getInput(name).trim();
+    return raw === '' ? undefined : raw;
+}
+function getRawInputs() {
     const apiKey = core.getInput('api-key', { required: true });
-    const baseUrl = core.getInput('base-url').trim() || undefined;
-    if (apiType === 'openai-chat-compatible' && !baseUrl) {
-        throw new Error("'base-url' is required when api-type is 'openai-chat-compatible'.");
-    }
-    const model = core.getInput('model', { required: true });
     const githubToken = core.getInput('github-token', { required: true });
-    let appTokenUrl = core.getInput('app-token-url').trim() || undefined;
+    let appTokenUrl = optionalInput('app-token-url');
     if (appTokenUrl) {
         let parsed;
         try {
@@ -31031,47 +31017,187 @@ function getInputs() {
         }
         appTokenUrl = parsed.toString();
     }
-    const triggerComment = core.getInput('trigger-comment').trim() || '/reviewally';
-    const triggerLabel = core.getInput('trigger-label').trim() || 'reviewally';
-    const autoReview = core.getBooleanInput('auto-review');
-    const maxFiles = parseIntInput('max-files', 20);
-    const maxDiffLines = parseIntInput('max-diff-lines', 3000);
-    const excludePatterns = parseList(core.getInput('exclude-patterns'));
-    const useDefaultExcludes = core.getBooleanInput('use-default-excludes');
-    const extraInstructions = core.getInput('extra-instructions').trim() || undefined;
-    const reviewModeRaw = core.getInput('review-mode').trim().toLowerCase() || 'standard';
-    if (!VALID_REVIEW_MODES.has(reviewModeRaw)) {
-        throw new Error(`Invalid review-mode '${reviewModeRaw}'. Must be one of: ${[...VALID_REVIEW_MODES].join(', ')}`);
-    }
-    const reviewMode = reviewModeRaw;
-    const agentTarballMaxMb = parseIntInput('agent-tarball-max-mb', 200);
-    const contextDocs = parseList(core.getInput('context-docs'));
-    const piVersion = core.getInput('pi-version').trim() || DEFAULT_PI_VERSION;
+    const piVersion = optionalInput('pi-version') ?? DEFAULT_PI_VERSION;
     if (!VERSION_PATTERN.test(piVersion)) {
         throw new Error(`Invalid pi-version '${piVersion}'. Must be a plain version or dist-tag (e.g. 0.82.1, latest).`);
     }
-    const piTimeoutMs = parseIntInput('pi-timeout-ms', 600000);
     return {
-        apiType,
+        apiType: optionalInput('api-type'),
         apiKey,
-        baseUrl,
-        model,
+        baseUrl: optionalInput('base-url'),
+        model: optionalInput('model'),
         githubToken,
         appTokenUrl,
-        triggerComment,
-        triggerLabel,
-        autoReview,
-        maxFiles,
-        maxDiffLines,
-        excludePatterns,
-        useDefaultExcludes,
-        extraInstructions,
-        reviewMode,
-        agentTarballMaxMb,
-        contextDocs: contextDocs.length > 0 ? contextDocs : ['AGENTS.md', '.reviewally.md', 'CONTRIBUTING.md'],
+        triggerComment: optionalInput('trigger-comment') ?? '/reviewally',
+        triggerLabel: optionalInput('trigger-label') ?? 'reviewally',
+        autoReview: optionalInput('auto-review'),
+        maxFiles: parseIntInput('max-files', 20),
+        maxDiffLines: parseIntInput('max-diff-lines', 3000),
+        useDefaultExcludes: core.getBooleanInput('use-default-excludes'),
+        reviewMode: optionalInput('review-mode')?.toLowerCase(),
+        agentTarballMaxMb: parseIntInput('agent-tarball-max-mb', 200),
         piVersion,
-        piTimeoutMs,
+        piTimeoutMs: parseIntInput('pi-timeout-ms', 600000),
     };
+}
+
+
+/***/ }),
+
+/***/ 9183:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CONFIG_VARIABLES = void 0;
+exports.repoVariablesFromEnv = repoVariablesFromEnv;
+exports.resolveInputs = resolveInputs;
+exports.configSummaryRows = configSummaryRows;
+const util_1 = __nccwpck_require__(1125);
+const VALID_API_TYPES = new Set([
+    'openai',
+    'openai-chat-compatible',
+    'anthropic',
+]);
+const VALID_REVIEW_MODES = new Set(['standard', 'agent']);
+const DEFAULT_CONTEXT_DOCS = ['AGENTS.md', '.reviewally.md', 'CONTRIBUTING.md'];
+exports.CONFIG_VARIABLES = {
+    apiType: 'REVIEWALLY_API_TYPE',
+    baseUrl: 'REVIEWALLY_BASE_URL',
+    model: 'REVIEWALLY_MODEL',
+    reviewMode: 'REVIEWALLY_REVIEW_MODE',
+    autoReview: 'REVIEWALLY_AUTO_REVIEW',
+    extraInstructions: 'REVIEWALLY_EXTRA_INSTRUCTIONS',
+    contextDocs: 'REVIEWALLY_CONTEXT_DOCS',
+    excludePatterns: 'REVIEWALLY_EXCLUDE_PATTERNS',
+};
+const KNOWN_VARIABLES = new Set(Object.values(exports.CONFIG_VARIABLES));
+function parseList(value) {
+    return value
+        .split(/[\n,]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+/**
+ * REVIEWALLY_* config forwarded from the workflow's `vars` context, e.g.
+ * `env: { REVIEWALLY_MODEL: ${{ vars.REVIEWALLY_MODEL }} }`. The REST variables
+ * API needs a Variables(read) App/PAT token, so the workflow token cannot use it.
+ */
+function repoVariablesFromEnv(env = process.env) {
+    const vars = new Map();
+    for (const name of KNOWN_VARIABLES) {
+        const value = env[name]?.trim();
+        if (value)
+            vars.set(name, value);
+    }
+    return vars;
+}
+function pick(raw, vars, variableName) {
+    if (raw !== undefined)
+        return { value: raw, source: 'workflow input' };
+    const value = vars.get(variableName)?.trim();
+    if (value)
+        return { value, source: 'repo variable' };
+    return { source: 'default' };
+}
+function fromVariable(source, variableName) {
+    return source === 'repo variable' ? ` (from repository variable ${variableName})` : '';
+}
+/** Resolve the config chain (workflow input > repo variable > default) and validate the result. */
+function resolveInputs(raw, vars) {
+    const sources = {};
+    const apiTypePick = pick(raw.apiType, vars, exports.CONFIG_VARIABLES.apiType);
+    const apiType = apiTypePick.value;
+    if (!apiType) {
+        throw new Error(`'api-type' is required — set the workflow input or the ${exports.CONFIG_VARIABLES.apiType} repository variable.`);
+    }
+    if (!VALID_API_TYPES.has(apiType)) {
+        throw new Error(`Invalid api-type '${apiType}'${fromVariable(apiTypePick.source, exports.CONFIG_VARIABLES.apiType)}. Must be one of: ${[...VALID_API_TYPES].join(', ')}`);
+    }
+    sources.apiType = apiTypePick.source;
+    const baseUrlPick = pick(raw.baseUrl, vars, exports.CONFIG_VARIABLES.baseUrl);
+    sources.baseUrl = baseUrlPick.source;
+    const baseUrl = baseUrlPick.value;
+    if (apiType === 'openai-chat-compatible' && !baseUrl) {
+        throw new Error(`'base-url' is required when api-type is 'openai-chat-compatible' — set the workflow input or the ${exports.CONFIG_VARIABLES.baseUrl} repository variable.`);
+    }
+    const modelPick = pick(raw.model, vars, exports.CONFIG_VARIABLES.model);
+    if (!modelPick.value) {
+        throw new Error(`'model' is required — set the workflow input or the ${exports.CONFIG_VARIABLES.model} repository variable.`);
+    }
+    sources.model = modelPick.source;
+    const reviewModePick = pick(raw.reviewMode, vars, exports.CONFIG_VARIABLES.reviewMode);
+    const reviewMode = (reviewModePick.value ?? 'standard').toLowerCase();
+    if (!VALID_REVIEW_MODES.has(reviewMode)) {
+        throw new Error(`Invalid review-mode '${reviewModePick.value}'${fromVariable(reviewModePick.source, exports.CONFIG_VARIABLES.reviewMode)}. Must be one of: ${[...VALID_REVIEW_MODES].join(', ')}`);
+    }
+    sources.reviewMode = reviewModePick.source;
+    const autoReviewPick = pick(raw.autoReview, vars, exports.CONFIG_VARIABLES.autoReview);
+    const autoReviewRaw = (autoReviewPick.value ?? 'false').toLowerCase();
+    if (autoReviewRaw !== 'true' && autoReviewRaw !== 'false') {
+        throw new Error(`Invalid auto-review '${autoReviewPick.value}'${fromVariable(autoReviewPick.source, exports.CONFIG_VARIABLES.autoReview)}. Must be 'true' or 'false'.`);
+    }
+    sources.autoReview = autoReviewPick.source;
+    const extraInstructionsPick = pick(undefined, vars, exports.CONFIG_VARIABLES.extraInstructions);
+    sources.extraInstructions = extraInstructionsPick.source;
+    const contextDocsPick = pick(undefined, vars, exports.CONFIG_VARIABLES.contextDocs);
+    sources.contextDocs = contextDocsPick.source;
+    const excludePatternsPick = pick(undefined, vars, exports.CONFIG_VARIABLES.excludePatterns);
+    sources.excludePatterns = excludePatternsPick.source;
+    const contextDocs = contextDocsPick.value ? parseList(contextDocsPick.value) : [];
+    const excludePatterns = excludePatternsPick.value ? parseList(excludePatternsPick.value) : [];
+    const inputs = {
+        apiType: apiType,
+        apiKey: raw.apiKey,
+        baseUrl,
+        model: modelPick.value,
+        githubToken: raw.githubToken,
+        appTokenUrl: raw.appTokenUrl,
+        triggerComment: raw.triggerComment,
+        triggerLabel: raw.triggerLabel,
+        autoReview: autoReviewRaw === 'true',
+        maxFiles: raw.maxFiles,
+        maxDiffLines: raw.maxDiffLines,
+        excludePatterns,
+        useDefaultExcludes: raw.useDefaultExcludes,
+        extraInstructions: extraInstructionsPick.value,
+        reviewMode: reviewMode,
+        agentTarballMaxMb: raw.agentTarballMaxMb,
+        contextDocs: contextDocs.length > 0 ? contextDocs : DEFAULT_CONTEXT_DOCS,
+        piVersion: raw.piVersion,
+        piTimeoutMs: raw.piTimeoutMs,
+    };
+    return { inputs, sources };
+}
+const SUMMARY_KNOBS = [
+    { key: 'apiType', label: 'api-type', render: (i) => i.apiType },
+    { key: 'baseUrl', label: 'base-url', render: (i) => i.baseUrl ?? '(none)' },
+    { key: 'model', label: 'model', render: (i) => i.model },
+    { key: 'reviewMode', label: 'review-mode', render: (i) => i.reviewMode },
+    { key: 'autoReview', label: 'auto-review', render: (i) => (i.autoReview ? 'true' : 'false') },
+    {
+        key: 'extraInstructions',
+        label: 'extra-instructions',
+        render: (i) => i.extraInstructions ?? '(none)',
+    },
+    { key: 'contextDocs', label: 'context-docs', render: (i) => i.contextDocs.join(', ') },
+    {
+        key: 'excludePatterns',
+        label: 'exclude-patterns',
+        render: (i) => (i.excludePatterns.length > 0 ? i.excludePatterns.join(', ') : '(none)'),
+    },
+];
+/** One row per configurable knob: value + where it came from. */
+function configSummaryRows(config) {
+    return [
+        ['Setting', 'Value', 'Source'],
+        ...SUMMARY_KNOBS.map(({ key, label, render }) => [
+            label,
+            (0, util_1.truncate)(render(config.inputs).replace(/\s+/g, ' ').trim(), 60),
+            config.sources[key] ?? 'default',
+        ]),
+    ];
 }
 
 
@@ -31449,6 +31575,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(7484));
 const github_1 = __nccwpck_require__(3228);
 const inputs_1 = __nccwpck_require__(4389);
+const variables_1 = __nccwpck_require__(9183);
 const trigger_1 = __nccwpck_require__(7131);
 const app_token_1 = __nccwpck_require__(9624);
 const api_1 = __nccwpck_require__(8943);
@@ -31464,13 +31591,16 @@ async function run() {
     let repaired = false;
     let modelResponse = '';
     try {
-        const inputs = (0, inputs_1.getInputs)();
-        core.setSecret(inputs.apiKey);
+        const raw = (0, inputs_1.getRawInputs)();
+        core.setSecret(raw.apiKey);
+        const config = (0, variables_1.resolveInputs)(raw, (0, variables_1.repoVariablesFromEnv)());
+        const inputs = config.inputs;
         const trigger = (0, trigger_1.resolveTrigger)(inputs);
         if (!trigger.run || !trigger.review) {
             core.info(`Skipping: ${trigger.reason}`);
             return;
         }
+        core.summary.addTable((0, variables_1.configSummaryRows)(config)).write();
         const { owner, repo, pullNumber, commentId } = trigger.review;
         // Branded bot: swap the workflow identity for the ReviewAlly App identity
         // when a minter endpoint is configured. Falls back gracefully.
@@ -32232,8 +32362,20 @@ function buildRepoTree(root, inputs, maxEntries = MAX_TREE_ENTRIES) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createModel = createModel;
+const node_crypto_1 = __nccwpck_require__(7598);
 const openai_1 = __nccwpck_require__(3436);
 const anthropic_1 = __nccwpck_require__(9930);
+const USER_AGENT = 'reviewally';
+/** OpenCode Zen requires clients to identify themselves and send a stable session id. */
+function isOpenCodeZen(baseUrl) {
+    try {
+        const host = new URL(baseUrl).hostname.toLowerCase();
+        return host === 'opencode.ai' || host.endsWith('.opencode.ai');
+    }
+    catch {
+        return false;
+    }
+}
 function createModel(inputs) {
     switch (inputs.apiType) {
         case 'openai': {
@@ -32244,7 +32386,10 @@ function createModel(inputs) {
             if (!inputs.baseUrl) {
                 throw new Error("'base-url' is required when api-type is 'openai-chat-compatible'.");
             }
-            const factory = (0, openai_1.createOpenAI)({ apiKey: inputs.apiKey, baseURL: inputs.baseUrl });
+            const headers = { 'user-agent': USER_AGENT };
+            if (isOpenCodeZen(inputs.baseUrl))
+                headers['x-opencode-session'] = (0, node_crypto_1.randomUUID)();
+            const factory = (0, openai_1.createOpenAI)({ apiKey: inputs.apiKey, baseURL: inputs.baseUrl, headers });
             return factory.chat(inputs.model);
         }
         case 'anthropic': {

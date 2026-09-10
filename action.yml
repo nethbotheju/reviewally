@@ -7,17 +7,17 @@ branding:
 
 inputs:
   api-type:
-    description: 'LLM API protocol: openai | openai-chat-compatible | anthropic'
-    required: true
+    description: 'LLM API protocol: openai | openai-chat-compatible | anthropic. Can be set with the REVIEWALLY_API_TYPE repository variable instead.'
+    required: false
   api-key:
     description: 'API key for the LLM provider (BYOK). Store this in a secret.'
     required: true
   base-url:
-    description: 'Base URL of the API. Required for openai-chat-compatible. Optional override for openai/anthropic.'
+    description: 'Base URL of the API. Required for openai-chat-compatible. Optional override for openai/anthropic. Can be set with the REVIEWALLY_BASE_URL repository variable instead.'
     required: false
   model:
-    description: 'Model identifier to use for the review (e.g. gpt-4o, claude-sonnet-4-5).'
-    required: true
+    description: 'Model identifier to use for the review (e.g. gpt-4o, claude-sonnet-4-5). Can be set with the REVIEWALLY_MODEL repository variable instead.'
+    required: false
 
   github-token:
     description: 'GitHub token used to read the PR and post the review. Defaults to the automatic workflow token.'
@@ -37,9 +37,8 @@ inputs:
     required: false
     default: 'reviewally'
   auto-review:
-    description: 'When true, also review automatically on PR open/reopen/push (synchronize) without a label or command.'
+    description: 'When true, also review automatically on PR open/reopen/push (synchronize) without a label or command. Can be set with the REVIEWALLY_AUTO_REVIEW repository variable instead.'
     required: false
-    default: 'false'
 
   max-files:
     description: 'Maximum number of changed files to review per run.'
@@ -49,33 +48,19 @@ inputs:
     description: 'Maximum total added lines to review per run (protects token budget).'
     required: false
     default: '3000'
-  exclude-patterns:
-    description: 'Additional glob patterns to exclude (newline or comma separated), e.g. *.generated.ts, vendor/**'
-    required: false
-    default: ''
   use-default-excludes:
     description: 'Apply the built-in excludes for lockfiles, minified files, and sourcemaps. Build artifacts, dependencies, and VCS metadata are always excluded regardless of this setting.'
     required: false
     default: 'true'
 
-  extra-instructions:
-    description: 'Extra review guidance appended to the prompt (e.g. project conventions, style rules).'
-    required: false
-    default: ''
-
   # Agent-mode inputs
   review-mode:
-    description: 'Review mode: standard (single prompt) or agent (tool-enabled investigation loop).'
+    description: 'Review mode: standard (single prompt) or agent (tool-enabled investigation loop). Can be set with the REVIEWALLY_REVIEW_MODE repository variable instead.'
     required: false
-    default: 'standard'
   agent-tarball-max-mb:
     description: 'Maximum tarball size in MB for the repo snapshot (agent mode). Larger repos degrade to standard mode.'
     required: false
     default: '200'
-  context-docs:
-    description: 'Comma/newline-separated list of markdown doc files to include from the repo root (e.g. AGENTS.md, CONTRIBUTING.md).'
-    required: false
-    default: ''
   pi-version:
     description: 'Version of @earendil-works/pi-coding-agent to install for agent mode (e.g. 0.82.1, latest).'
     required: false
