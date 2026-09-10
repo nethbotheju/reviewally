@@ -1,5 +1,3 @@
-import * as core from '@actions/core';
-import type { OctokitLike } from '../github/api';
 import { truncate } from '../shared/util';
 import type {
   ActionInputs,
@@ -40,12 +38,16 @@ function parseList(value: string): string[] {
     .filter(Boolean);
 }
 
-/** Repository REVIEWALLY_* variables; unknown names are ignored. */
-export async function fetchRepoVariables(octokit: OctokitLike): Promise<Map<string, string>> {
-  const { data } = await octokit.request('GET /repos/{owner}/{repo}/actions/variables');
+/**
+ * REVIEWALLY_* config forwarded from the workflow's `vars` context, e.g.
+ * `env: { REVIEWALLY_MODEL: ${{ vars.REVIEWALLY_MODEL }} }`. The REST variables
+ * API needs a Variables(read) App/PAT token, so the workflow token cannot use it.
+ */
+export function repoVariablesFromEnv(env: NodeJS.ProcessEnv = process.env): Map<string, string> {
   const vars = new Map<string, string>();
-  for (const { name, value } of data.variables) {
-    if (KNOWN_VARIABLES.has(name)) vars.set(name, value);
+  for (const name of KNOWN_VARIABLES) {
+    const value = env[name]?.trim();
+    if (value) vars.set(name, value);
   }
   return vars;
 }
@@ -188,11 +190,4 @@ export function configSummaryRows(config: ResolvedConfig): string[][] {
       config.sources[key] ?? 'default',
     ]),
   ];
-}
-
-export function warnVariablesUnavailable(err: unknown): void {
-  core.warning(
-    `Could not read repository variables — REVIEWALLY_* config overrides are ignored this run (${(err as Error).message}). ` +
-      'Grant the workflow `actions: read` permission to enable them.',
-  );
 }

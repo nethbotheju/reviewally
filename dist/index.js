@@ -31045,50 +31045,15 @@ function getRawInputs() {
 /***/ }),
 
 /***/ 9183:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CONFIG_VARIABLES = void 0;
-exports.fetchRepoVariables = fetchRepoVariables;
+exports.repoVariablesFromEnv = repoVariablesFromEnv;
 exports.resolveInputs = resolveInputs;
 exports.configSummaryRows = configSummaryRows;
-exports.warnVariablesUnavailable = warnVariablesUnavailable;
-const core = __importStar(__nccwpck_require__(7484));
 const util_1 = __nccwpck_require__(1125);
 const VALID_API_TYPES = new Set([
     'openai',
@@ -31114,12 +31079,16 @@ function parseList(value) {
         .map((s) => s.trim())
         .filter(Boolean);
 }
-/** Repository REVIEWALLY_* variables; unknown names are ignored. */
-async function fetchRepoVariables(octokit) {
-    const { data } = await octokit.request('GET /repos/{owner}/{repo}/actions/variables');
+/**
+ * REVIEWALLY_* config forwarded from the workflow's `vars` context, e.g.
+ * `env: { REVIEWALLY_MODEL: ${{ vars.REVIEWALLY_MODEL }} }`. The REST variables
+ * API needs a Variables(read) App/PAT token, so the workflow token cannot use it.
+ */
+function repoVariablesFromEnv(env = process.env) {
     const vars = new Map();
-    for (const { name, value } of data.variables) {
-        if (KNOWN_VARIABLES.has(name))
+    for (const name of KNOWN_VARIABLES) {
+        const value = env[name]?.trim();
+        if (value)
             vars.set(name, value);
     }
     return vars;
@@ -31229,10 +31198,6 @@ function configSummaryRows(config) {
             config.sources[key] ?? 'default',
         ]),
     ];
-}
-function warnVariablesUnavailable(err) {
-    core.warning(`Could not read repository variables — REVIEWALLY_* config overrides are ignored this run (${err.message}). ` +
-        'Grant the workflow `actions: read` permission to enable them.');
 }
 
 
@@ -31628,14 +31593,7 @@ async function run() {
     try {
         const raw = (0, inputs_1.getRawInputs)();
         core.setSecret(raw.apiKey);
-        let variables = new Map();
-        try {
-            variables = await (0, variables_1.fetchRepoVariables)((0, github_1.getOctokit)(raw.githubToken));
-        }
-        catch (err) {
-            (0, variables_1.warnVariablesUnavailable)(err);
-        }
-        const config = (0, variables_1.resolveInputs)(raw, variables);
+        const config = (0, variables_1.resolveInputs)(raw, (0, variables_1.repoVariablesFromEnv)());
         const inputs = config.inputs;
         const trigger = (0, trigger_1.resolveTrigger)(inputs);
         if (!trigger.run || !trigger.review) {

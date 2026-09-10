@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import type { OctokitLike } from '../github/api';
 import type { RawActionInputs } from './types';
 import {
   CONFIG_VARIABLES,
   configSummaryRows,
-  fetchRepoVariables,
+  repoVariablesFromEnv,
   resolveInputs,
 } from './variables';
 
@@ -34,35 +33,25 @@ function vars(entries: Record<string, string> = {}): Map<string, string> {
   return new Map(Object.entries(entries));
 }
 
-describe('fetchRepoVariables', () => {
-  function octokitWith(payload: unknown): OctokitLike {
-    return {
-      request: async () => ({ data: payload }),
-    } as unknown as OctokitLike;
-  }
-
-  it('keeps known REVIEWALLY_* variables and ignores unknown ones', async () => {
-    const octokit = octokitWith({
-      total_count: 3,
-      variables: [
-        { name: 'REVIEWALLY_MODEL', value: 'deepseek-v4-flash' },
-        { name: 'REVIEWALLY_SOMETHING_ELSE', value: 'ignored' },
-        { name: 'UNRELATED', value: 'also-ignored' },
-      ],
-    });
-    const vars = await fetchRepoVariables(octokit);
+describe('repoVariablesFromEnv', () => {
+  it('reads known REVIEWALLY_* values and ignores unknown names', () => {
+    const vars = repoVariablesFromEnv({
+      REVIEWALLY_MODEL: 'deepseek-v4-flash',
+      REVIEWALLY_SOMETHING_ELSE: 'ignored',
+      UNRELATED: 'also-ignored',
+    } as NodeJS.ProcessEnv);
     expect(vars.get('REVIEWALLY_MODEL')).toBe('deepseek-v4-flash');
     expect(vars.has('REVIEWALLY_SOMETHING_ELSE')).toBe(false);
     expect(vars.has('UNRELATED')).toBe(false);
   });
 
-  it('propagates request failures to the caller', async () => {
-    const octokit = {
-      request: async () => {
-        throw new Error('403 Resource not accessible by integration');
-      },
-    } as unknown as OctokitLike;
-    await expect(fetchRepoVariables(octokit)).rejects.toThrow(/403/);
+  it('trims values and treats blanks as unset (an unset variable forwards as empty)', () => {
+    const vars = repoVariablesFromEnv({
+      REVIEWALLY_MODEL: '  gpt-4o  ',
+      REVIEWALLY_BASE_URL: '',
+    } as NodeJS.ProcessEnv);
+    expect(vars.get('REVIEWALLY_MODEL')).toBe('gpt-4o');
+    expect(vars.has('REVIEWALLY_BASE_URL')).toBe(false);
   });
 });
 

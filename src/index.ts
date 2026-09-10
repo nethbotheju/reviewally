@@ -1,12 +1,7 @@
 import * as core from '@actions/core';
 import { getOctokit } from '@actions/github';
 import { getRawInputs } from './config/inputs';
-import {
-  fetchRepoVariables,
-  resolveInputs,
-  configSummaryRows,
-  warnVariablesUnavailable,
-} from './config/variables';
+import { repoVariablesFromEnv, resolveInputs, configSummaryRows } from './config/variables';
 import { resolveTrigger } from './github/trigger';
 import { fetchAppToken, AppNotInstalledError } from './github/app-token';
 import {
@@ -39,13 +34,7 @@ async function run(): Promise<void> {
     const raw = getRawInputs();
     core.setSecret(raw.apiKey);
 
-    let variables = new Map<string, string>();
-    try {
-      variables = await fetchRepoVariables(getOctokit(raw.githubToken));
-    } catch (err) {
-      warnVariablesUnavailable(err);
-    }
-    const config = resolveInputs(raw, variables);
+    const config = resolveInputs(raw, repoVariablesFromEnv());
     const inputs = config.inputs;
 
     const trigger = resolveTrigger(inputs);

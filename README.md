@@ -28,7 +28,7 @@ ReviewAlly reads your pull request diff through the GitHub API and posts a struc
 - **Bring your own key:** OpenAI, Anthropic, or any OpenAI-compatible endpoint — your model, your billing.
 - **Two review modes:** fast diff review, or agent mode that investigates your repo first.
 - **On your terms:** trigger by label, slash command, or automatically.
-- **Configured from the UI:** swap model, provider, or review mode via repository variables — no workflow edits, no commits.
+- **Configured from the UI:** swap model, provider, or review mode in repository variables — no commits, no pull requests.
 - **Structured reviews:** background, per-file changes, prioritized recommendations.
 
 ## Quick start
@@ -77,13 +77,26 @@ jobs:
         with:
           app-token-url: https://api.reviewally.nethbotheju.dev/token
           api-key: ${{ secrets.REVIEWALLY_API_KEY }}
-          # model: gpt-4o        # optional: pins the model, overriding REVIEWALLY_MODEL
-          # review-mode: agent   # optional: pins the mode, overriding REVIEWALLY_REVIEW_MODE
+          # Optional: pin a setting here to override its variable for this workflow
+          # api-type: openai-chat-compatible        # overrides REVIEWALLY_API_TYPE
+          # base-url: https://opencode.ai/zen/go/v1 # overrides REVIEWALLY_BASE_URL
+          # model: gpt-4o                           # overrides REVIEWALLY_MODEL
+          # review-mode: agent                      # overrides REVIEWALLY_REVIEW_MODE
+        # Paste this once; from now on change values in Settings, not here.
+        env:
+          REVIEWALLY_API_TYPE: ${{ vars.REVIEWALLY_API_TYPE }}
+          REVIEWALLY_BASE_URL: ${{ vars.REVIEWALLY_BASE_URL }}
+          REVIEWALLY_MODEL: ${{ vars.REVIEWALLY_MODEL }}
+          REVIEWALLY_REVIEW_MODE: ${{ vars.REVIEWALLY_REVIEW_MODE }}
+          REVIEWALLY_AUTO_REVIEW: ${{ vars.REVIEWALLY_AUTO_REVIEW }}
+          REVIEWALLY_EXTRA_INSTRUCTIONS: ${{ vars.REVIEWALLY_EXTRA_INSTRUCTIONS }}
+          REVIEWALLY_CONTEXT_DOCS: ${{ vars.REVIEWALLY_CONTEXT_DOCS }}
+          REVIEWALLY_EXCLUDE_PATTERNS: ${{ vars.REVIEWALLY_EXCLUDE_PATTERNS }}
 ```
 
 5. Open a pull request, or comment `/reviewally` on one.
 
-Everything else — review mode, auto-review, extra instructions, excludes — is managed with the `REVIEWALLY_*` repository variables above. To pin a setting in the workflow file instead, add it to `with:`: an explicit input always overrides the variable. That's the one rule to remember: **the workflow file wins, so don't put config there unless you mean to freeze it.**
+The `env:` block is written once and then left alone — it just forwards your repository variables to the action. To pin a setting to the workflow instead, add it to `with:` (e.g. `model: gpt-4o`): an explicit input always overrides the variable. That's the one rule to remember: **the workflow file wins, so don't put config there unless you mean to freeze it.**
 
 ## Review modes
 
@@ -120,9 +133,9 @@ For deeper changes, ReviewAlly takes a snapshot of the repository at the PR head
 
 ## Repository variables
 
-**ReviewAlly's behavior is controlled here — no workflow edits, no commits, ever.** These repository variables (Settings → Secrets and variables → Actions → Variables) take effect from the next review onward. Resolution per setting: **workflow input > repository variable > built-in default** — an input written in the workflow always wins, so leave it out of the workflow to let the variable apply.
+**Set them once under Settings → Secrets and variables → Actions → Variables, then change them any time — no commits, no pull requests.** The workflow forwards each variable to the action with a one-time `env:` block (in the example above), because the workflow token is not allowed to read the variables API. Add one line per variable you use.
 
-Reading them requires the `actions: read` permission on the workflow (already included in the example above) — when a workflow sets a `permissions:` block, every unlisted permission is `none`. Without it, ReviewAlly warns and falls back to the workflow inputs.
+Resolution per setting: **workflow input > repository variable > built-in default** — an input written in the workflow always wins, so leave it out of the workflow to let the variable apply.
 
 | Variable | Sets |
 | --- | --- |

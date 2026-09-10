@@ -38,7 +38,6 @@ jobs:
         github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
     permissions:
-      actions: read        # required to read REVIEWALLY_* repository variables
       contents: read
       pull-requests: write
     steps:
@@ -46,6 +45,19 @@ jobs:
         with:
           app-token-url: https://api.reviewally.nethbotheju.dev/token
           api-key: ${{ secrets.REVIEWALLY_API_KEY }}
-          # Uncomment to pin a setting for this workflow (overrides the variable):
-          # model: gpt-4o
-          # review-mode: agent
+          # Optional: pin a setting here to override its variable for this workflow
+          # api-type: openai-chat-compatible        # overrides REVIEWALLY_API_TYPE
+          # base-url: https://opencode.ai/zen/go/v1 # overrides REVIEWALLY_BASE_URL
+          # model: gpt-4o                           # overrides REVIEWALLY_MODEL
+          # review-mode: agent                      # overrides REVIEWALLY_REVIEW_MODE
+        # Forward your repository variables once. After this, change values in
+        # Settings → Secrets and variables → Actions → Variables — never here.
+        env:
+          REVIEWALLY_API_TYPE: ${{ vars.REVIEWALLY_API_TYPE }}
+          REVIEWALLY_BASE_URL: ${{ vars.REVIEWALLY_BASE_URL }}
+          REVIEWALLY_MODEL: ${{ vars.REVIEWALLY_MODEL }}
+          REVIEWALLY_REVIEW_MODE: ${{ vars.REVIEWALLY_REVIEW_MODE }}
+          REVIEWALLY_AUTO_REVIEW: ${{ vars.REVIEWALLY_AUTO_REVIEW }}
+          REVIEWALLY_EXTRA_INSTRUCTIONS: ${{ vars.REVIEWALLY_EXTRA_INSTRUCTIONS }}
+          REVIEWALLY_CONTEXT_DOCS: ${{ vars.REVIEWALLY_CONTEXT_DOCS }}
+          REVIEWALLY_EXCLUDE_PATTERNS: ${{ vars.REVIEWALLY_EXCLUDE_PATTERNS }}

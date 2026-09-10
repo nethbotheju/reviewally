@@ -20,7 +20,6 @@ jobs:
         github.event.issue.pull_request != null)
     runs-on: ubuntu-latest
     permissions:
-      actions: read
       contents: read
       pull-requests: write
     steps:
@@ -28,8 +27,13 @@ jobs:
       - uses: ./
         with:
           app-token-url: https://api.reviewally.nethbotheju.dev/token
-          api-type: openai-chat-compatible
-          model: deepseek-v4-flash
-          base-url: 'https://opencode.ai/zen/go/v1'
           api-key: ${{ secrets.REVIEWALLY_API_KEY }}
-          auto-review: 'true'
+        env:
+          REVIEWALLY_API_TYPE: ${{ vars.REVIEWALLY_API_TYPE }}
+          REVIEWALLY_BASE_URL: ${{ vars.REVIEWALLY_BASE_URL }}
+          REVIEWALLY_MODEL: ${{ vars.REVIEWALLY_MODEL }}
+          REVIEWALLY_REVIEW_MODE: ${{ vars.REVIEWALLY_REVIEW_MODE }}
+          REVIEWALLY_AUTO_REVIEW: ${{ vars.REVIEWALLY_AUTO_REVIEW }}
+          REVIEWALLY_EXTRA_INSTRUCTIONS: ${{ vars.REVIEWALLY_EXTRA_INSTRUCTIONS }}
+          REVIEWALLY_CONTEXT_DOCS: ${{ vars.REVIEWALLY_CONTEXT_DOCS }}
+          REVIEWALLY_EXCLUDE_PATTERNS: ${{ vars.REVIEWALLY_EXCLUDE_PATTERNS }}
